@@ -110,6 +110,13 @@ select.f { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; 
 .grip { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: grab; padding: 2px 4px; touch-action: none; border-radius: 4px; }
 .grip:hover { background: var(--col); }
 .card h3 { margin: 0; font: 500 14px/1.35 var(--body); overflow-wrap: anywhere; }
+.last { margin: 6px 0 0; font-size: 12.5px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.last b { color: var(--ink); font-weight: 500; }
+.comments { display: grid; gap: 8px; }
+.cm { background: var(--bg); border-radius: 6px; padding: 8px 10px; position: relative; }
+.cm .who { font-size: 12px; color: var(--muted); margin-bottom: 2px; padding-right: 24px; } .cm .who b { color: var(--ink); font-weight: 600; }
+.cm p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.cm button { position: absolute; top: 4px; right: 4px; border: 0; background: transparent; color: var(--muted); cursor: pointer; padding: 2px 6px; }
 .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; color: var(--muted); }
 .meta:empty { display: none; }
 .due { font: 500 11.5px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--col); color: var(--muted); }
@@ -359,6 +366,10 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <div class="checklist" id="cChecklist"></div>
         <input class="inp" id="cNewItem" placeholder="Add a step and press Enter">
       </div>
+      <div class="field"><span>Comments</span>
+        <div class="ed-row" style="align-items:flex-start"><textarea class="inp" id="cNewComment" rows="2" placeholder="Latest status, a question, a decision…" style="min-height:0;font:inherit"></textarea><button type="button" class="btn small primary" id="cPost">Post</button></div>
+        <div class="comments" id="cComments"></div>
+      </div>
       <div class="share">
         <a class="btn small" id="cCal" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Add to Google Calendar</a>
         <a class="btn small" id="cMail" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Email owner</a>
@@ -604,7 +615,7 @@ function renderStrip() {
     ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '') + calChip();
 }
 function cardHtml(c) {
-  const os = ownersOf(c), ds = dueState(c), done = doneIds().has(c.columnId);
+  const os = ownersOf(c), ds = dueState(c), done = doneIds().has(c.columnId), lastC = (c.comments || [])[(c.comments || []).length - 1];
   const ck = c.checklist.length ? `<span class="ck ${c.checklist.every(i => i.done) ? 'full' : ''}">☑ ${c.checklist.filter(i => i.done).length}/${c.checklist.length}</span>` : '';
   const due = c.due ? `<span class="due ${ds === 'overdue' ? 'overdue' : ds === 'soon' ? 'soon' : ''}" title="Due date">${ds === 'overdue' ? 'Overdue · ' : ''}${fmtDay(c.due)}${c.time ? ' · ' + c.time : ''}</span>` : '';
   const tags = c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('');
@@ -612,7 +623,7 @@ function cardHtml(c) {
   return `<article class="card p-${c.priority}${done ? ' done' : ''}" data-id="${c.id}" tabindex="0" aria-label="${esc(c.title)}">
     <div class="card-top"><span class="tkt">T-${String(c.num).padStart(3, '0')}</span>${c.example ? '<span class="ex">Example</span>' : ''}
     <button class="grip" type="button" aria-label="Drag to move" title="Drag to move">⠿</button></div>
-    <h3>${esc(c.title)}</h3><div class="meta">${due}${tags}${ck}${av}</div></article>`;
+    <h3>${esc(c.title)}</h3>${lastC ? `<p class="last" title="${esc(lastC.text)}">💬 <b>${esc(ago(lastC.at))}</b> · ${esc(lastC.text)}</p>` : ''}<div class="meta">${due}${tags}${ck}${av}</div></article>`;
 }
 function renderBoard() {
   const b = $('#board'), sx = b.scrollLeft;
@@ -842,7 +853,29 @@ $('#clearExamples').addEventListener('click', () => { const ex = new Set(pc().fi
 
 /* ---- card editor ---- */
 const dlg = $('#cardDlg');
-let editing = null, draftList = [], draftOwners = [], delArmed = false;
+let editing = null, draftList = [], draftOwners = [], draftComments = [], delArmed = false;
+/* Comments: newest shown first. On a saved card a comment is kept as soon as it is posted; on a new card it is kept with the card. */
+function ago(t) {
+  const m = Math.round((Date.now() - t) / 60000);
+  if (m < 1) return 'just now'; if (m < 60) return `${m}m ago`; if (m < 1440) return `${Math.round(m / 60)}h ago`;
+  const d = new Date(t); return fmtDay(isoDay(d));
+}
+function commentAuthor() {
+  const email = backend && backend.email, p = email && state.people.find(x => x.email && x.email.toLowerCase() === email.toLowerCase());
+  return p ? p.name : (state.people[0] && state.people[0].name) || (email ? email.split('@')[0] : 'Me');
+}
+function renderComments() {
+  $('#cComments').innerHTML = draftComments.slice().reverse().map(m => `<div class="cm"><div class="who"><b>${esc(m.by || '')}</b> · <span title="${esc(new Date(m.at).toLocaleString())}">${esc(ago(m.at))}</span></div><p>${esc(m.text)}</p><button type="button" data-cmrm="${m.id}" aria-label="Delete comment">✕</button></div>`).join('');
+}
+function keepComments() { if (!editing) return; const c = state.cards.find(x => x.id === editing); if (c) { c.comments = draftComments.map(m => ({ ...m })); c.updatedAt = Date.now(); commit(); } }
+function postComment() {
+  const t = $('#cNewComment').value.trim(); if (!t) return $('#cNewComment').focus();
+  draftComments.push({ id: uid(), text: t.slice(0, 2000), by: commentAuthor(), at: Date.now() });
+  $('#cNewComment').value = ''; renderComments(); keepComments();
+}
+$('#cPost').addEventListener('click', postComment);
+$('#cNewComment').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); postComment(); } });
+$('#cComments').addEventListener('click', e => { const b = e.target.closest('[data-cmrm]'); if (!b) return; draftComments = draftComments.filter(m => m.id !== b.dataset.cmrm); renderComments(); keepComments(); });
 function renderOwners() {
   $('#cOwners').innerHTML = state.people.map(p => `<button type="button" class="tagp" data-owner="${p.id}" aria-pressed="${draftOwners.includes(p.id)}">${esc(p.name)}</button>`).join('') || '<span class="hint">Add people in Board settings.</span>';
 }
@@ -862,6 +895,7 @@ function openCard(id, colId) {
   $('#cTags').value = c?.tags.join(', ') || '';
   $('#cNotes').value = c?.notes || '';
   draftList = (c?.checklist || []).map(i => ({ ...i }));
+  draftComments = (c?.comments || []).map(m => ({ ...m })); $('#cNewComment').value = ''; renderComments();
   renderChecklist();
   $('#cStamp').textContent = c ? `Created ${new Date(c.createdAt).toLocaleString()}` + (c.updatedAt !== c.createdAt ? ` · Updated ${new Date(c.updatedAt).toLocaleString()}` : '') + (c.doneAt && doneIds().has(c.columnId) ? ` · Finished ${new Date(c.doneAt).toLocaleDateString()}` : '') : '';
   $('#cDelete').hidden = !c; disarm();
@@ -1509,10 +1543,11 @@ $('#cardForm').addEventListener('submit', e => {
   e.preventDefault();
   const title = $('#cTitle').value.trim(); if (!title) return;
   const pending = $('#cNewItem').value.trim(); if (pending) { draftList.push({ text: pending, done: false }); $('#cNewItem').value = ''; }
+  const unposted = $('#cNewComment').value.trim(); if (unposted) { draftComments.push({ id: uid(), text: unposted.slice(0, 2000), by: commentAuthor(), at: Date.now() }); $('#cNewComment').value = ''; }
   const colId = $('#cCol').value, now = Date.now();
   const data = { title, columnId: colId, owners: draftOwners.filter(id => person(id)), owner: draftOwners.find(id => person(id)) || '', priority: $('#cPriority').value, due: $('#cDue').value, time: $('#cDue').value ? $('#cTime').value : '',
     tags: [...new Set($('#cTags').value.split(',').map(s => s.trim()).filter(Boolean))], notes: $('#cNotes').value.trim(),
-    checklist: draftList.filter(i => i.text.trim()), updatedAt: now };
+    checklist: draftList.filter(i => i.text.trim()), comments: draftComments.map(m => ({ ...m })), updatedAt: now };
   if (editing) {
     const c = state.cards.find(x => x.id === editing);
     if (c.columnId !== colId) { data.order = nextOrder(colId); markDone(c, colId); }
