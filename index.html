@@ -255,6 +255,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
     <button class="btn primary" id="newCard" title="New card (N)" data-board>+ New card</button>
     <select id="ledMonth" class="f" aria-label="Month" data-ledger></select>
     <button class="btn" id="ledCsv" data-ledger>Copy as CSV</button>
+    <button class="btn" id="ledImport" data-ledger>Import</button>
     <button class="btn primary" id="newEntry" title="New entry (N)" data-ledger>+ New entry</button>
     <button class="btn stage-btn" id="openStages" title="Edit stages" data-board>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Stages</button>
@@ -313,6 +314,18 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   </form>
 </dialog>
 
+<dialog id="impDlg">
+  <form class="dlg" id="impForm">
+    <div class="dlg-head"><h2>Import entries</h2><button type="button" class="btn ghost x" id="iClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <p class="hint">Pick a CSV file or paste it below. It needs the columns Date, Description, Category, Type (In or Out) and Amount, the same as <b>Copy as CSV</b>. Entries go into the project you have open. Importing the same file twice doesn't add duplicates.</p>
+      <input type="file" id="iFile" accept=".csv,text/csv,text/plain">
+      <textarea class="inp" id="iText" placeholder="Date,Description,Category,Type,Amount"></textarea>
+      <p class="hint" id="iSummary"></p>
+    </div>
+    <div class="dlg-foot"><span class="sp"></span><button type="button" class="btn" id="iCancel">Cancel</button><button type="submit" class="btn primary" id="iGo" disabled>Import</button></div>
+  </form>
+</dialog>
 <dialog id="entryDlg">
   <form class="dlg" id="entryForm">
     <div class="dlg-head"><h2 id="eHead">New entry</h2><button type="button" class="btn ghost x" id="eClose" aria-label="Close">✕</button></div>
@@ -848,11 +861,11 @@ function fmtMoney(n, sign) {
   return (n < 0 ? '−' : sign && n > 0 ? '+' : '') + t;
 }
 function parseAmount(v) {
-  const cur = state.currency || 'IDR'; v = String(v).replace(/[^\d.,]/g, '');
-  if ((CUR_DIGITS[cur] ?? 2) === 0) return Number(v.replace(/[.,]/g, '')) || 0;
+  const cur = state.currency || 'IDR', neg = /^\s*[-−(]/.test(String(v)) ? -1 : 1; v = String(v).replace(/[^\d.,]/g, '');
+  if ((CUR_DIGITS[cur] ?? 2) === 0) return neg * (Number(v.replace(/[.,]/g, '')) || 0);
   const k = Math.max(v.lastIndexOf('.'), v.lastIndexOf(','));
-  if (k >= 0 && v.length - k - 1 <= 2) return Number(v.slice(0, k).replace(/[.,]/g, '') + '.' + v.slice(k + 1)) || 0;
-  return Number(v.replace(/[.,]/g, '')) || 0;
+  if (k >= 0 && v.length - k - 1 <= 2) return neg * (Number(v.slice(0, k).replace(/[.,]/g, '') + '.' + v.slice(k + 1)) || 0);
+  return neg * (Number(v.replace(/[.,]/g, '')) || 0);
 }
 const pl = () => { const id = P().id, first = state.projects[0].id; return state.ledger.filter(e => (e.projectId || first) === id); };
 const byDate = (a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0);
@@ -924,6 +937,55 @@ $('#ledCsv').addEventListener('click', () => {
   const txt = rows.map(r => r.map(x => q(String(x))).join(',')).join('\n');
   navigator.clipboard.writeText(txt).then(() => toast(`Copied ${rows.length - 1} entries. Paste them into a spreadsheet`), () => toast('Copying is blocked here. Try from the installed app or another browser'));
 });
+/* Import: CSV in the Copy as CSV layout. Each entry's id comes from its content and position among identical
+   rows, so importing the same file again updates those entries instead of duplicating them. */
+const iDlg = $('#impDlg'); let iRows = [];
+function csvRows(t) {
+  const out = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++) { const ch = t[i];
+    if (q) { if (ch === '"') { if (t[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += ch; }
+    else if (ch === '"') q = true; else if (ch === ',' || ch === '\t') { row.push(f); f = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; row.push(f); out.push(row); row = []; f = ''; }
+    else f += ch; }
+  if (f || row.length) { row.push(f); out.push(row); }
+  return out.filter(r => r.some(x => x.trim()));
+}
+function impDate(v) {
+  v = v.trim(); if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const m = v.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2}|\d{4})$/); if (!m) return '';
+  const y = m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]); return `${y}-${pad(Number(m[2]))}-${pad(Number(m[1]))}`;
+}
+const hash = t => { let h = 2166136261; for (const ch of t) { h ^= ch.charCodeAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+function parseImport() {
+  const rows = csvRows($('#iText').value); iRows = []; let bad = 0;
+  if (!rows.length) { $('#iSummary').textContent = ''; $('#iGo').disabled = true; return; }
+  const head = rows[0].map(h => h.trim().toLowerCase()), col = n => head.indexOf(n);
+  const [cD, cDe, cC, cT, cA] = ['date', 'description', 'category', 'type', 'amount'].map(col);
+  if (cD < 0 || cA < 0) { $('#iSummary').textContent = 'The first line needs at least Date and Amount column names.'; $('#iGo').disabled = true; return; }
+  const seen = {};
+  for (const r of rows.slice(1)) {
+    const date = impDate(r[cD] || ''), a = parseAmount(r[cA] || ''), type = cT >= 0 ? (r[cT] || '').trim().toLowerCase() : '';
+    if (!date || !a) { bad++; continue; }
+    const kind = type === 'in' ? 'in' : type === 'out' ? 'out' : a > 0 ? 'in' : 'out';
+    const amount = kind === 'in' ? a : -a, desc = (cDe >= 0 && r[cDe] || '').trim() || 'Imported entry', category = cC >= 0 ? (r[cC] || '').trim() : '';
+    const key = [P().id, date, desc, category, kind, amount].join('|'); seen[key] = (seen[key] || 0) + 1;
+    iRows.push({ id: 'i' + hash(key + '|' + seen[key]), projectId: P().id, kind, amount, date, desc, category, cardId: '' });
+  }
+  const tin = iRows.filter(e => e.kind === 'in').reduce((t, e) => t + e.amount, 0), tout = iRows.filter(e => e.kind === 'out').reduce((t, e) => t + e.amount, 0);
+  $('#iSummary').innerHTML = iRows.length ? `<b>${iRows.length}</b> entries into <b>${esc(P().name)}</b>. Money in ${fmtMoney(tin)}, money out ${fmtMoney(tout)}, net ${fmtMoney(tin - tout, true)}.` + (bad ? ` ${bad} lines skipped because the date or amount was missing.` : '') : 'No entries found.';
+  $('#iGo').disabled = !iRows.length;
+}
+$('#ledImport').addEventListener('click', () => { $('#iText').value = ''; $('#iFile').value = ''; parseImport(); iDlg.showModal(); });
+$('#iFile').addEventListener('change', async e => { const f = e.target.files[0]; if (f) { $('#iText').value = await f.text(); parseImport(); } });
+$('#iText').addEventListener('input', parseImport);
+$('#iCancel').addEventListener('click', () => iDlg.close());
+$('#iClose').addEventListener('click', () => iDlg.close());
+$('#impForm').addEventListener('submit', ev => {
+  ev.preventDefault(); if (!iRows.length) return;
+  const now = Date.now(); let added = 0;
+  iRows.forEach((e, i) => { const old = state.ledger.find(x => x.id === e.id); if (old) Object.assign(old, e, { updatedAt: now }); else { state.ledger.push({ ...e, createdAt: now + i, updatedAt: now }); added++; } });
+  ui.ledMonth = ''; saveUi(); iDlg.close(); commit(); toast(`Imported ${added} new entries` + (iRows.length - added ? `, updated ${iRows.length - added}` : ''));
+});
 const eDlg = $('#entryDlg'); let editingE = null, eArmed = false;
 function openEntry(id) {
   const e = id ? state.ledger.find(x => x.id === id) : null; editingE = e ? e.id : null; eArmed = false;
@@ -950,7 +1012,7 @@ $('#eDelete').addEventListener('click', () => {
 $('#entryForm').addEventListener('submit', ev => {
   ev.preventDefault();
   const amount = parseAmount($('#eAmount').value), desc = $('#eDesc').value.trim(), date = $('#eDate').value;
-  if (!(amount > 0)) { toast('Enter an amount above zero'); return $('#eAmount').focus(); }
+  if (!amount) { toast('Enter an amount. Use a minus sign for a cashback or money taken back'); return $('#eAmount').focus(); }
   if (!desc || !date) return;
   const data = { kind: $('#eKindIn').checked ? 'in' : 'out', amount, date, desc, category: $('#eCat').value.trim(), cardId: $('#eCard').value, updatedAt: Date.now() };
   if (editingE) Object.assign(state.ledger.find(x => x.id === editingE), data);
