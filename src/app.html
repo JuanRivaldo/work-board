@@ -276,6 +276,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <textarea class="inp" id="sPaste" placeholder="Paste a backup here to replace this board"></textarea>
         <div class="ed-row"><button class="btn small" id="sRestore">Restore from pasted backup</button></div>
       </div>
+      <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p>Cards with a due date appear as all-day events on your Google Calendar, and the card's owner is invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don't get duplicate update emails.</p>
+        <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
       <div class="sect"><h3>Start over</h3><p>Erases every project, card, person and stage.</p>
         <div class="ed-row"><button class="btn small danger" id="sReset">Erase board</button></div>
@@ -368,7 +370,7 @@ function matches(card) {
 }
 const sorted = colId => state.cards.filter(c => c.columnId === colId).sort((a, b) => a.order - b.order);
 
-function render() { renderTop(); renderStrip(); renderBoard(); }
+function render() { renderTop(); renderStrip(); renderBoard(); scheduleCal(); }
 function renderSub() {
   const open = pc().filter(c => !doneIds().has(c.columnId)).length;
   const sync = mode === 'loading' ? 'Connecting…' : mode === 'local' ? 'Saved on this device' : writing ? 'Saving…' : 'Synced online';
@@ -397,7 +399,7 @@ function renderStrip() {
     `<button class="chip soon" data-due="week" aria-pressed="${ui.due === 'week'}"><b>${week}</b> due in 7 days</button>` +
     `<button class="chip" data-pri="urgent" aria-pressed="${ui.priority === 'urgent'}"><b>${urgent}</b> urgent</button>` +
     `<span class="chip static"><b>${doneWeek}</b> finished this week</span>` +
-    ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '');
+    ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '') + calChip();
 }
 function cardHtml(c) {
   const p = person(c.owner), ds = dueState(c), done = doneIds().has(c.columnId);
@@ -590,6 +592,7 @@ $('#strip').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.due) ui.due = ui.due === b.dataset.due ? '' : b.dataset.due;
   if (b.dataset.pri) ui.priority = ui.priority === b.dataset.pri ? '' : b.dataset.pri;
+  if (b.dataset.cal) return connectCal();
   if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project }; $('#q').value = ''; }
   saveUi(); render();
 });
@@ -628,6 +631,67 @@ $('#cChecklist').addEventListener('change', e => { const i = e.target.dataset.i;
 $('#cChecklist').addEventListener('input', e => { const i = e.target.dataset.i; if (i != null && e.target.type === 'text') draftList[i].text = e.target.value; });
 $('#cChecklist').addEventListener('click', e => { const r = e.target.dataset.rm; if (r != null) { draftList.splice(+r, 1); renderChecklist(); } });
 $('#cNewItem').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v) { draftList.push({ text: v, done: false }); e.target.value = ''; renderChecklist(); } } });
+/* ---- Google Calendar sync (hosted site only). Each card with a due date is one all-day event on the
+   connected person's primary calendar; the event id is derived from the card id, so any update is idempotent. ---- */
+const GKEY = 'workboard.gcal.v1';
+let gcal = { on: false, token: null, exp: 0, sigs: {} }, gTimer = null, gBusy = false, gErr = '';
+try { Object.assign(gcal, JSON.parse(localStorage.getItem(GKEY) || '{}')); } catch (e) {}
+function saveG() { try { localStorage.setItem(GKEY, JSON.stringify(gcal)); } catch (e) {} }
+function gcalAvailable() { return !!(window.WB_SUPA && window.WB_SUPA.googleClientId) && window.top === window; }
+const gcalLive = () => !!gcal.token && Date.now() < gcal.exp;
+const evId = c => 'tb' + [...c.id].map(ch => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+function calEvent(c) {
+  if (!c.due) return null;
+  const proj = state.projects.find(p => p.id === cardProject(c)); if (!proj) return null;
+  const col = proj.columns.find(x => x.id === c.columnId); if (!col || col.done) return null;
+  const owner = person(c.owner), end = new Date(c.due + 'T00:00:00'); end.setDate(end.getDate() + 1);
+  const steps = (c.checklist || []).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
+  return { summary: c.title, start: { date: c.due }, end: { date: isoDay(end) }, status: 'confirmed',
+    description: [`${proj.name} · ${col.name} · T-${String(c.num).padStart(3, '0')}`, c.notes, steps, location.origin + location.pathname].filter(Boolean).join('\n\n'),
+    attendees: owner && owner.email ? [{ email: owner.email }] : [] };
+}
+function calChip() {
+  if (!gcalAvailable()) return '';
+  if (!gcal.on) return `<button class="chip" data-cal="1">Connect Google Calendar</button>`;
+  if (!gcalLive()) return `<button class="chip soon" data-cal="1"><b>!</b> Reconnect Google Calendar</button>`;
+  return `<span class="chip static" title="${esc(gErr)}">${gErr ? '<b>!</b> Calendar sync failed' : gBusy ? 'Updating calendar…' : 'Calendar synced'}</span>`;
+}
+function connectCal() {
+  const g = window.google && window.google.accounts && window.google.accounts.oauth2;
+  if (!g) return toast('Google sign-in is still loading. Try again in a moment');
+  g.initTokenClient({ client_id: window.WB_SUPA.googleClientId, scope: 'https://www.googleapis.com/auth/calendar.events', callback: r => {
+    if (!r || r.error || !r.access_token) { toast('Google Calendar was not connected'); return; }
+    gcal.token = r.access_token; gcal.exp = Date.now() + ((r.expires_in || 3600) - 60) * 1000; gcal.on = true; gErr = ''; saveG();
+    toast('Google Calendar connected'); renderStrip(); renderAnySettings(); syncCal();
+  } }).requestAccessToken({ prompt: gcal.on ? '' : 'consent' });
+}
+function scheduleCal() { if (!gcal.on || !gcalAvailable() || mode === 'loading') return; clearTimeout(gTimer); gTimer = setTimeout(syncCal, 1200); }
+async function calApi(method, path, body) {
+  const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events' + path, { method, headers: { Authorization: 'Bearer ' + gcal.token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { gcal.token = null; saveG(); throw { auth: true }; }
+  return r;
+}
+async function syncCal() {
+  if (gBusy || !gcalLive()) { if (!gcalLive()) renderStrip(); return; }
+  gBusy = true; renderStrip();
+  try {
+    const want = {}; state.cards.forEach(c => { const ev = calEvent(c); if (ev) want[evId(c)] = ev; });
+    for (const [id, ev] of Object.entries(want)) {
+      const sig = JSON.stringify(ev); if (gcal.sigs[id] === sig) continue;
+      let r = await calApi('PATCH', `/${id}?sendUpdates=all`, ev);
+      if (r.status === 404) r = await calApi('POST', '?sendUpdates=all', { ...ev, id });
+      if (!r.ok) throw new Error(`Google Calendar answered ${r.status}`);
+      gcal.sigs[id] = sig; saveG();
+    }
+    for (const id of Object.keys(gcal.sigs)) if (!want[id]) {
+      const r = await calApi('DELETE', `/${id}?sendUpdates=all`);
+      if (r.ok || r.status === 404 || r.status === 410) { delete gcal.sigs[id]; saveG(); } else throw new Error(`Google Calendar answered ${r.status}`);
+    }
+    gErr = '';
+  } catch (e) { gErr = e && e.auth ? '' : String((e && e.message) || e); }
+  gBusy = false; renderStrip();
+}
+
 /* Share a card: a prefilled Google Calendar event (inviting the owner) and an email to the owner. */
 const ymd = s => s.replace(/-/g, '');
 function updateShare() {
@@ -646,6 +710,9 @@ function updateShare() {
     const body = `${title}\n${due ? 'Due ' + fmtDay(due) + '\n' : ''}\n${details}`;
     mail.href = `mailto:${encodeURIComponent(owner.email)}?subject=${encodeURIComponent((tkt ? `[${tkt}] ` : '') + title)}&body=${encodeURIComponent(body)}`; mail.removeAttribute('aria-disabled');
   } else { mail.removeAttribute('href'); mail.setAttribute('aria-disabled', 'true'); }
+  const auto = gcalAvailable() && gcal.on;
+  cal.hidden = auto;
+  if (auto) { $('#cShareHint').textContent = due ? 'This card syncs to your Google Calendar automatically' + (owner && owner.email ? ` and invites ${owner.email}.` : '.') : 'Set a due date to put this card on your Google Calendar.'; return; }
   $('#cShareHint').textContent = !due && !(owner && owner.email) ? 'Set a due date and an owner with an email to use these.' : !due ? 'Set a due date to add it to Google Calendar.' : !(owner && owner.email) ? (owner ? `Add an email for ${owner.name} in Board settings to email them.` : 'Pick an owner to email them.') : `The calendar event invites ${owner.email}.`;
 }
 $('#cardForm').addEventListener('input', updateShare);
@@ -772,6 +839,9 @@ function renderSettings() {
   $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><input class="inp" type="email" id="pe-${p.id}" value="${esc(p.email || '')}" data-pemail="${p.id}" placeholder="Email" aria-label="Email for ${esc(p.name)}"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
   renderStages();
   $('#sSaveFile').hidden = window.top !== window;
+  $('#sCal').hidden = !gcalAvailable();
+  $('#sCalState').textContent = !gcal.on ? 'Not connected on this device.' : gcalLive() ? 'Connected on this device.' : 'Connected, but Google needs you to sign in again.';
+  $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() ? 'Stop syncing' : 'Reconnect';
   $('#sAccount').hidden = !(backend && backend.signOut); if (backend && backend.email) $('#sEmail').textContent = `Signed in as ${backend.email}`;
   $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
 }
@@ -847,6 +917,10 @@ $('#sReset').addEventListener('click', () => {
 
 window.addEventListener('storage', e => { if (mode === 'local' && e.key === KEY) { state = load(); render(); } });
 $('#doImport').addEventListener('click', importLocal);
+$('#sCalBtn').addEventListener('click', () => {
+  if (gcal.on && gcalLive()) { gcal = { on: false, token: null, exp: 0, sigs: {} }; saveG(); toast('Stopped syncing to Google Calendar. Existing events stay'); renderAnySettings(); renderStrip(); }
+  else connectCal();
+});
 $('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
 $('#skipImport').addEventListener('click', () => { try { localStorage.setItem(IMPKEY, '1'); } catch (e) {} $('#importNotice').hidden = true; });
 start();
