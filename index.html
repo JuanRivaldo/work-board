@@ -10,6 +10,8 @@
 <style>html{color-scheme:light}:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 </head>
 <body>
+<script src="vendor/supabase.js"></script>
+<script src="config.js"></script>
 <title>Juan's Work Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -215,6 +217,19 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   </form>
 </dialog>
 
+<dialog id="loginDlg">
+  <form class="dlg" id="loginForm">
+    <div class="dlg-head"><h2>Sign in to your board</h2></div>
+    <div class="dlg-body">
+      <p class="hint">Sign in with the same email and password on every device to see the same board.</p>
+      <label class="field"><span>Email</span><input id="lEmail" type="email" autocomplete="email" required></label>
+      <label class="field"><span>Password</span><input id="lPass" type="password" autocomplete="current-password" required minlength="6"></label>
+      <p class="hint" id="lMsg" role="status"></p>
+    </div>
+    <div class="dlg-foot"><button type="submit" class="btn" id="lSignup">Create account</button><span class="sp"></span><button type="submit" class="btn primary" id="lSignin">Sign in</button></div>
+  </form>
+</dialog>
+
 <dialog id="stageDlg">
   <div class="dlg">
     <div class="dlg-head"><h2>Stages</h2><button type="button" class="btn ghost x" id="stClose" aria-label="Close">✕</button></div>
@@ -244,6 +259,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <textarea class="inp" id="sPaste" placeholder="Paste a backup here to replace this board"></textarea>
         <div class="ed-row"><button class="btn small" id="sRestore">Restore from pasted backup</button></div>
       </div>
+      <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
       <div class="sect"><h3>Start over</h3><p>Erases every card, person and column.</p>
         <div class="ed-row"><button class="btn small danger" id="sReset">Erase board</button></div>
       </div>
@@ -383,7 +399,7 @@ function commit() { if (mode === 'local') save(); else if (mode === 'cloud') pus
 const IMPKEY = 'workboard.imported.v1';
 const clone = o => JSON.parse(JSON.stringify(o));
 const metaOf = d => ({ version: d.version || 1, name: d.name || 'Work Board', people: d.people || [], columns: d.columns || [], nextNum: d.nextNum || 1 });
-let metaRef = null, cardsCol = null, writing = 0, pendingRender = false;
+let backend = null, writing = 0, pendingRender = false;
 const synced = { meta: null, cards: new Map() }, chains = new Map();
 function enqueue(key, fn) {
   writing++; renderSub();
@@ -393,14 +409,18 @@ function enqueue(key, fn) {
 }
 function pushCloud() {
   const m = JSON.stringify(metaOf(state));
-  if (m !== synced.meta) { synced.meta = m; const body = JSON.parse(m); enqueue('meta', () => metaRef.set(body)); }
+  if (m !== synced.meta) { synced.meta = m; const body = JSON.parse(m); enqueue('meta', () => backend.setMeta(body)); }
   const ids = new Set();
   for (const c of state.cards) {
     ids.add(c.id); const j = JSON.stringify(c);
-    if (synced.cards.get(c.id) !== j) { synced.cards.set(c.id, j); const body = JSON.parse(j); enqueue(c.id, () => cardsCol.doc(c.id).set(body)); }
+    if (synced.cards.get(c.id) !== j) { synced.cards.set(c.id, j); const body = JSON.parse(j); enqueue(c.id, () => backend.setCard(c.id, body)); }
   }
-  for (const id of [...synced.cards.keys()]) if (!ids.has(id)) { synced.cards.delete(id); enqueue(id, () => cardsCol.doc(id).delete()); }
+  for (const id of [...synced.cards.keys()]) if (!ids.has(id)) { synced.cards.delete(id); enqueue(id, () => backend.delCard(id)); }
 }
+function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); if (m.columns.length) Object.assign(state, m); }
+function applyCards(list) { state.cards = list.map(clone); synced.cards = new Map(state.cards.map(x => [x.id, JSON.stringify(x)])); }
+function applyCard(c) { c = clone(c); const i = state.cards.findIndex(x => x.id === c.id); if (i < 0) state.cards.push(c); else state.cards[i] = c; synced.cards.set(c.id, JSON.stringify(c)); }
+function removeCard(id) { state.cards = state.cards.filter(x => x.id !== id); synced.cards.delete(id); }
 function writeFail(e) {
   const code = e && e.code;
   if (code === 'not_granted') toast('You can view this board but not change it');
@@ -413,21 +433,76 @@ function dbFail() { if (mode === 'loading') goLocal('Could not reach the online 
 async function start() {
   render();
   const c = window.claude;
-  if (!c || typeof c.use !== 'function') return goLocal();
+  if (!c || typeof c.use !== 'function') {
+    const cfg = window.WB_SUPA;
+    if (cfg && cfg.url && cfg.key) {
+      if (!window.supabase) return goLocal('You are offline. Changes made now stay on this device only');
+      return startSupabase(cfg).catch(e => { console.error(e); goLocal('Could not reach the online board. Using this device only'); });
+    }
+    return goLocal();
+  }
   let db = null; try { db = await c.use('db'); } catch (e) {}
   if (!db) return goLocal();
-  metaRef = db.doc('board/meta'); cardsCol = db.collection('cards');
+  const metaRef = db.doc('board/meta'), cardsCol = db.collection('cards');
+  backend = { setMeta: b => metaRef.set(b), setCard: (id, b) => cardsCol.doc(id).set(b), delCard: id => cardsCol.doc(id).delete() };
   let gotMeta = false, gotCards = false;
   const ready = () => { if (gotMeta && gotCards && mode === 'loading') { mode = 'cloud'; checkImport(); } scheduleRender(); };
   metaRef.onSnapshot(s => {
-    if (s.exists) { const m = metaOf(clone(s.data())); synced.meta = JSON.stringify(m); if (m.columns.length) Object.assign(state, m); }
+    if (s.exists) applyMeta(s.data());
     if (s.exists || !s.metadata.fromCache) gotMeta = true; ready();
   }, dbFail);
   cardsCol.onSnapshot(s => {
-    state.cards = s.docs.map(d => ({ ...clone(d.data()), id: d.id }));
-    synced.cards = new Map(state.cards.map(x => [x.id, JSON.stringify(x)]));
+    applyCards(s.docs.map(d => ({ ...d.data(), id: d.id })));
     if (s.size || !s.metadata.fromCache) gotCards = true; ready();
   }, dbFail);
+}
+/* Supabase: table items(board_id = the signed-in user, id = 'meta' | 'card:<id>', data jsonb) */
+const chk = r => { if (r.error) throw r.error; };
+async function startSupabase(cfg) {
+  const sb = window.supabase.createClient(cfg.url, cfg.key);
+  let { data: { session } } = await sb.auth.getSession();
+  if (!session) session = await showLogin(sb);
+  const uid = session.user.id, T = () => sb.from('items');
+  backend = {
+    email: session.user.email,
+    setMeta: b => T().upsert({ board_id: uid, id: 'meta', data: b }).then(chk),
+    setCard: (id, b) => T().upsert({ board_id: uid, id: 'card:' + id, data: b }).then(chk),
+    delCard: id => T().delete().eq('board_id', uid).eq('id', 'card:' + id).then(chk),
+    signOut: () => sb.auth.signOut().then(() => location.reload())
+  };
+  const loadAll = async () => {
+    const { data, error } = await T().select('id,data').eq('board_id', uid); if (error) throw error;
+    const meta = data.find(r => r.id === 'meta'); if (meta) applyMeta(meta.data);
+    applyCards(data.filter(r => r.id.startsWith('card:')).map(r => r.data));
+  };
+  await loadAll();
+  mode = 'cloud'; checkImport(); render();
+  sb.channel('items-' + uid).on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: 'board_id=eq.' + uid }, p => {
+    const row = p.eventType === 'DELETE' ? p.old : p.new; if (!row || !row.id) return;
+    const key = row.id === 'meta' ? 'meta' : row.id.slice(5);
+    if (chains.has(key)) return; // our own write is still in flight
+    if (key === 'meta') { if (p.new && p.new.data) applyMeta(p.new.data); }
+    else if (p.eventType === 'DELETE') removeCard(key); else applyCard(p.new.data);
+    scheduleRender();
+  }).subscribe();
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && !writing) loadAll().then(scheduleRender, () => {}); });
+}
+function showLogin(sb) {
+  return new Promise(resolve => {
+    const d = $('#loginDlg'), msg = t => { $('#lMsg').textContent = t; };
+    d.addEventListener('cancel', e => e.preventDefault());
+    d.showModal();
+    $('#loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const email = $('#lEmail').value.trim(), password = $('#lPass').value, signup = e.submitter && e.submitter.id === 'lSignup';
+      if (password.length < 6) return msg('Use a password of at least 6 characters.');
+      msg(signup ? 'Creating your account…' : 'Signing in…');
+      const r = signup ? await sb.auth.signUp({ email, password, options: { emailRedirectTo: location.origin + location.pathname } }) : await sb.auth.signInWithPassword({ email, password });
+      if (r.error) return msg(r.error.message);
+      if (!r.data.session) return msg('Account created. Open the confirmation email, tap the link, then sign in here.');
+      d.close(); resolve(r.data.session);
+    });
+  });
 }
 function checkImport() {
   const l = loadLocal(); let skipped = false; try { skipped = localStorage.getItem(IMPKEY) === '1'; } catch (e) {}
@@ -613,6 +688,7 @@ function renderSettings() {
   $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
   renderStages();
   $('#sSaveFile').hidden = window.top !== window;
+  $('#sAccount').hidden = !(backend && backend.signOut); if (backend && backend.email) $('#sEmail').textContent = `Signed in as ${backend.email}`;
   $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
 }
 function renderStages() {
@@ -674,6 +750,7 @@ $('#sReset').addEventListener('click', () => {
 
 window.addEventListener('storage', e => { if (mode === 'local' && e.key === KEY) { state = load(); render(); } });
 $('#doImport').addEventListener('click', importLocal);
+$('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
 $('#skipImport').addEventListener('click', () => { try { localStorage.setItem(IMPKEY, '1'); } catch (e) {} $('#importNotice').hidden = true; });
 start();
 })();
