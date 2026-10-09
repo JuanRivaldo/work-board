@@ -39,6 +39,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 16px 10px; }
 .brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 220px; }
 .brand h1 { font: 700 22px/1.1 var(--display); margin: 0; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proj-wrap { display: flex; min-width: 0; }
+.proj { font: 700 22px/1.1 var(--display); letter-spacing: -.01em; color: var(--ink); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 2px 26px 2px 6px; margin-left: -6px; max-width: 100%; text-overflow: ellipsis; cursor: pointer;
+  appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: right 12px center, right 7px center; background-size: 5px 5px; background-repeat: no-repeat; }
+.proj:hover { border-color: var(--line); }
+.proj option { font: 400 14px var(--body); }
 .brand .sub { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
 .tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .search { position: relative; }
@@ -146,7 +151,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 </style>
 
 <header class="top">
-  <div class="brand"><h1 id="boardName">Work Board</h1><span class="sub" id="boardSub"></span></div>
+  <div class="brand"><h1 class="proj-wrap"><select id="projSel" class="proj" aria-label="Project"></select></h1><span class="sub" id="boardSub"></span></div>
   <div class="tools">
     <label class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Search cards" aria-label="Search cards"></label>
@@ -203,6 +208,18 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   </form>
 </dialog>
 
+<dialog id="npDlg">
+  <form class="dlg" id="npForm">
+    <div class="dlg-head"><h2>New project</h2></div>
+    <div class="dlg-body">
+      <label class="field"><span>Project name</span><input id="npName" required maxlength="60" placeholder="e.g. Office move"></label>
+      <label class="field"><span>Start with these stages</span><select id="npCopy"></select></label>
+      <p class="hint">Each project has its own stages and cards. Switch projects from the name at the top left.</p>
+    </div>
+    <div class="dlg-foot"><span class="sp"></span><button type="button" class="btn" id="npCancel">Cancel</button><button type="submit" class="btn primary">Create project</button></div>
+  </form>
+</dialog>
+
 <dialog id="loginDlg">
   <form class="dlg" id="loginForm">
     <div class="dlg-head"><h2>Sign in to your board</h2></div>
@@ -232,7 +249,10 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   <div class="dlg">
     <div class="dlg-head"><h2>Board settings</h2><button type="button" class="btn ghost x" id="sClose" aria-label="Close">✕</button></div>
     <div class="dlg-body">
-      <div class="sect"><h3>Board name</h3><div class="ed-row"><input class="inp" id="sName" maxlength="60"></div></div>
+      <div class="sect"><h3>Projects</h3><p>Rename, reorder or delete projects. Deleting a project also deletes its cards.</p>
+        <div id="sProjects" class="sect"></div>
+        <div class="ed-row"><button class="btn small" id="sNewProject">+ New project</button></div>
+      </div>
       <div class="sect"><h3>People</h3><p>Owners you can assign cards to. Add teammates now so their cards carry over when the board becomes shared.</p>
         <div id="sPeople" class="sect"></div>
         <div class="ed-row"><input class="inp" id="sNewPerson" placeholder="Name"><button class="btn small" id="sAddPerson">Add person</button></div>
@@ -246,7 +266,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <div class="ed-row"><button class="btn small" id="sRestore">Restore from pasted backup</button></div>
       </div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
-      <div class="sect"><h3>Start over</h3><p>Erases every card, person and column.</p>
+      <div class="sect"><h3>Start over</h3><p>Erases every project, card, person and stage.</p>
         <div class="ed-row"><button class="btn small danger" id="sReset">Erase board</button></div>
       </div>
     </div>
@@ -285,16 +305,24 @@ function seed() {
     c(3, 'Get quote approved by finance', { due: addDays(6), tags: ['finance'], owner: '' }),
     c(4, 'Set up the work board', { doneAt: now, tags: ['setup'] })
   ];
-  cards.forEach((x, i) => { x.num = i + 1; x.order = i; });
-  return { version: 1, name: "Juan's Work Board", people: [me], columns: cols, cards, nextNum: cards.length + 1 };
+  const pid = uid();
+  cards.forEach((x, i) => { x.num = i + 1; x.order = i; x.projectId = pid; });
+  return { version: 2, name: "Juan's Work Board", people: [me], projects: [{ id: pid, name: 'My project', columns: cols, nextNum: cards.length + 1 }], cards };
 }
 function loadLocal() { try { const s = localStorage.getItem(KEY); if (s) { const d = JSON.parse(s); if (valid(d)) return d; } } catch (e) {} return null; }
-function load() { return loadLocal() || seed(); }
+function load() { return norm(loadLocal() || seed()); }
+const defaultColumns = () => [{ id: uid(), name: 'Backlog' }, { id: uid(), name: 'To do' }, { id: uid(), name: 'In progress', limit: 3 }, { id: uid(), name: 'Waiting on others' }, { id: uid(), name: 'Done', done: true }];
+const newProject = (name, columns) => ({ id: uid(), name, columns: columns || defaultColumns(), nextNum: 1 });
 function blankBoard() {
-  return { version: 1, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], nextNum: 1, cards: [],
-    columns: [{ id: uid(), name: 'Backlog' }, { id: uid(), name: 'To do' }, { id: uid(), name: 'In progress', limit: 3 }, { id: uid(), name: 'Waiting on others' }, { id: uid(), name: 'Done', done: true }] };
+  return { version: 2, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], projects: [newProject('My project')], cards: [] };
 }
-function valid(d) { return d && Array.isArray(d.columns) && Array.isArray(d.cards) && Array.isArray(d.people) && d.columns.length; }
+function valid(d) { return d && Array.isArray(d.cards) && Array.isArray(d.people) && ((Array.isArray(d.projects) && d.projects.length) || (Array.isArray(d.columns) && d.columns.length)); }
+/* Boards saved before projects existed had one set of columns; they become the first project. */
+function norm(d) {
+  if (!Array.isArray(d.projects) || !d.projects.length) d.projects = [{ id: 'main', name: d.name || 'My project', columns: d.columns || defaultColumns(), nextNum: d.nextNum || 1 }];
+  delete d.columns; delete d.nextNum; d.version = 2;
+  return d;
+}
 function save() { if (mode === 'local') try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 let mode = 'loading'; // loading | cloud | local
 let state = blankBoard();
@@ -303,8 +331,11 @@ try { Object.assign(ui, JSON.parse(localStorage.getItem(UIKEY) || '{}'), { q: ''
 const saveUi = () => { try { localStorage.setItem(UIKEY, JSON.stringify(ui)); } catch (e) {} };
 
 const person = id => state.people.find(p => p.id === id);
-const column = id => state.columns.find(c => c.id === id);
-const doneIds = () => new Set(state.columns.filter(c => c.done).map(c => c.id));
+const P = () => state.projects.find(p => p.id === ui.project) || state.projects[0];
+const cardProject = c => c.projectId || state.projects[0].id;
+const pc = () => { const id = P().id; return state.cards.filter(c => cardProject(c) === id); };
+const column = id => P().columns.find(c => c.id === id);
+const doneIds = () => new Set(P().columns.filter(c => c.done).map(c => c.id));
 const initials = n => n.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
 function dueState(card) {
   if (!card.due || doneIds().has(card.columnId)) return card.due ? '' : null;
@@ -328,26 +359,28 @@ const sorted = colId => state.cards.filter(c => c.columnId === colId).sort((a, b
 
 function render() { renderTop(); renderStrip(); renderBoard(); }
 function renderSub() {
-  const open = state.cards.filter(c => !doneIds().has(c.columnId)).length;
+  const open = pc().filter(c => !doneIds().has(c.columnId)).length;
   const sync = mode === 'loading' ? 'Connecting…' : mode === 'local' ? 'Saved on this device' : writing ? 'Saving…' : 'Synced online';
   $('#boardSub').textContent = `${open} open · ${sync}`;
 }
 function renderTop() {
-  $('#boardName').textContent = state.name;
-  document.title = state.name;
+  const ps = $('#projSel');
+  ps.innerHTML = state.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('') + '<option value="__new">+ New project…</option>';
+  ps.value = P().id;
+  document.title = `${P().name} · Work Board`;
   renderSub();
   const fp = $('#fPerson');
   fp.innerHTML = `<option value="">Everyone</option>` + state.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('') + `<option value="_none">Unassigned</option>`;
   if (ui.person && ui.person !== '_none' && !person(ui.person)) ui.person = '';
   fp.value = ui.person; $('#fPriority').value = ui.priority;
-  $('#exampleNotice').hidden = !state.cards.some(c => c.example);
+  $('#exampleNotice').hidden = !pc().some(c => c.example);
 }
 function renderStrip() {
-  const open = state.cards.filter(c => !doneIds().has(c.columnId));
+  const open = pc().filter(c => !doneIds().has(c.columnId));
   const overdue = open.filter(c => dueState(c) === 'overdue').length;
   const week = open.filter(c => ['overdue', 'soon', 'week'].includes(dueState(c))).length;
   const urgent = open.filter(c => c.priority === 'urgent').length;
-  const doneWeek = state.cards.filter(c => doneIds().has(c.columnId) && c.doneAt && Date.now() - c.doneAt < 7 * 864e5).length;
+  const doneWeek = pc().filter(c => doneIds().has(c.columnId) && c.doneAt && Date.now() - c.doneAt < 7 * 864e5).length;
   $('#strip').innerHTML =
     `<button class="chip overdue" data-due="overdue" aria-pressed="${ui.due === 'overdue'}"><b>${overdue}</b> overdue</button>` +
     `<button class="chip soon" data-due="week" aria-pressed="${ui.due === 'week'}"><b>${week}</b> due in 7 days</button>` +
@@ -369,7 +402,7 @@ function cardHtml(c) {
 function renderBoard() {
   const b = $('#board'), sx = b.scrollLeft;
   const scrolls = {}; b.querySelectorAll('.list').forEach(l => scrolls[l.dataset.col] = l.scrollTop);
-  b.innerHTML = state.columns.map(col => {
+  b.innerHTML = P().columns.map(col => {
     const all = sorted(col.id), vis = all.filter(matches);
     const over = col.limit && all.length > col.limit;
     const count = (vis.length !== all.length ? `${vis.length} of ${all.length}` : `${all.length}`) + (col.limit ? ` / ${col.limit}` : '');
@@ -384,7 +417,7 @@ function commit() { if (mode === 'local') save(); else if (mode === 'cloud') pus
 /* ---- online sync: one doc for board settings, one doc per card ---- */
 const IMPKEY = 'workboard.imported.v1';
 const clone = o => JSON.parse(JSON.stringify(o));
-const metaOf = d => ({ version: d.version || 1, name: d.name || 'Work Board', people: d.people || [], columns: d.columns || [], nextNum: d.nextNum || 1 });
+const metaOf = d => { const n = norm({ ...d }); return { version: 2, name: n.name || 'Work Board', people: n.people || [], projects: n.projects }; };
 let backend = null, writing = 0, pendingRender = false;
 const synced = { meta: null, cards: new Map() }, chains = new Map();
 function enqueue(key, fn) {
@@ -403,7 +436,7 @@ function pushCloud() {
   }
   for (const id of [...synced.cards.keys()]) if (!ids.has(id)) { synced.cards.delete(id); enqueue(id, () => backend.delCard(id)); }
 }
-function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); if (m.columns.length) Object.assign(state, m); }
+function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); Object.assign(state, m); delete state.columns; delete state.nextNum; }
 function applyCards(list) { state.cards = list.map(clone); synced.cards = new Map(state.cards.map(x => [x.id, JSON.stringify(x)])); }
 function applyCard(c) { c = clone(c); const i = state.cards.findIndex(x => x.id === c.id); if (i < 0) state.cards.push(c); else state.cards[i] = c; synced.cards.set(c.id, JSON.stringify(c)); }
 function removeCard(id) { state.cards = state.cards.filter(x => x.id !== id); synced.cards.delete(id); }
@@ -497,23 +530,48 @@ function checkImport() {
   if (n) $('#importText').textContent = `You have ${n} card${n > 1 ? 's' : ''} saved on this device from the earlier version.`;
 }
 function importLocal() {
-  const l = loadLocal(); if (!l) return;
-  const colMap = {}, pMap = {};
-  l.columns.forEach(c => {
-    let t = state.columns.find(x => x.name.toLowerCase() === c.name.toLowerCase());
-    if (!t) { t = { id: uid(), name: c.name }; if (c.done) t.done = true; if (c.limit) t.limit = c.limit; const d = state.columns.findIndex(x => x.done); if (c.done || d < 0) state.columns.push(t); else state.columns.splice(d, 0, t); }
+  const l = loadLocal(); if (!l) return; norm(l);
+  const pMap = {}; let total = 0;
+  l.people.forEach(p => { let t = state.people.find(x => x.name.toLowerCase() === p.name.toLowerCase()); if (!t) { t = { ...p, id: uid() }; state.people.push(t); } pMap[p.id] = t.id; });
+  const keep = ui.project;
+  l.projects.forEach((lp, i) => {
+  let tp = state.projects.find(x => x.name.toLowerCase() === lp.name.toLowerCase()) || (i === 0 ? P() : null);
+  if (!tp) { tp = newProject(lp.name, []); state.projects.push(tp); }
+  ui.project = tp.id;
+  const colMap = {};
+  lp.columns.forEach(c => {
+    let t = P().columns.find(x => x.name.toLowerCase() === c.name.toLowerCase());
+    if (!t) { t = { id: uid(), name: c.name }; if (c.done) t.done = true; if (c.limit) t.limit = c.limit; const d = P().columns.findIndex(x => x.done); if (c.done || d < 0) P().columns.push(t); else P().columns.splice(d, 0, t); }
     colMap[c.id] = t.id;
   });
-  l.people.forEach(p => { let t = state.people.find(x => x.name.toLowerCase() === p.name.toLowerCase()); if (!t) { t = { ...p, id: uid() }; state.people.push(t); } pMap[p.id] = t.id; });
-  const cards = l.cards.filter(c => !c.example).sort((a, b) => a.num - b.num);
-  cards.forEach(c => { const col = colMap[c.columnId] || state.columns[0].id; state.cards.push({ ...c, id: uid(), num: state.nextNum++, columnId: col, owner: pMap[c.owner] || '', order: nextOrder(col) }); });
+  const cards = l.cards.filter(c => !c.example && (c.projectId || l.projects[0].id) === lp.id).sort((a, b) => a.num - b.num);
+  cards.forEach(c => { const col = colMap[c.columnId] || P().columns[0].id; state.cards.push({ ...c, id: uid(), projectId: tp.id, num: P().nextNum++, columnId: col, owner: pMap[c.owner] || '', order: nextOrder(col) }); });
+  total += cards.length;
+  });
+  ui.project = keep;
   try { localStorage.setItem(IMPKEY, '1'); } catch (e) {}
-  $('#importNotice').hidden = true; commit(); toast(`Moved ${cards.length} cards to your online board`);
+  $('#importNotice').hidden = true; commit(); toast(`Moved ${total} cards to your online board`);
 }
 let toastT;
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2400); }
 
 /* ---- filters ---- */
+$('#projSel').addEventListener('change', e => {
+  if (e.target.value === '__new') { e.target.value = P().id; return openNewProject(); }
+  switchProject(e.target.value);
+});
+function switchProject(id) { ui.project = id; ui.q = ''; $('#q').value = ''; saveUi(); render(); }
+const npDlg = $('#npDlg');
+function openNewProject() {
+  $('#npName').value = ''; $('#npCopy').innerHTML = `<option value="default">Backlog, To do, In progress, Waiting on others, Done</option><option value="copy">Same stages as ${esc(P().name)}</option>`;
+  npDlg.showModal(); $('#npName').focus();
+}
+$('#npForm').addEventListener('submit', e => {
+  e.preventDefault(); const name = $('#npName').value.trim(); if (!name) return;
+  const cols = $('#npCopy').value === 'copy' ? P().columns.map(c => ({ ...c, id: uid() })) : null;
+  const p = newProject(name, cols); state.projects.push(p); npDlg.close(); ui.project = p.id; saveUi(); commit(); toast(`Created ${name}`);
+});
+$('#npCancel').addEventListener('click', () => npDlg.close());
 $('#q').addEventListener('input', e => { ui.q = e.target.value.trim(); renderStrip(); renderBoard(); });
 $('#fPerson').addEventListener('change', e => { ui.person = e.target.value; saveUi(); renderStrip(); renderBoard(); });
 $('#fPriority').addEventListener('change', e => { ui.priority = e.target.value; saveUi(); renderStrip(); renderBoard(); });
@@ -521,10 +579,10 @@ $('#strip').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.due) ui.due = ui.due === b.dataset.due ? '' : b.dataset.due;
   if (b.dataset.pri) ui.priority = ui.priority === b.dataset.pri ? '' : b.dataset.pri;
-  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '' }; $('#q').value = ''; }
+  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project }; $('#q').value = ''; }
   saveUi(); render();
 });
-$('#clearExamples').addEventListener('click', () => { const n = state.cards.filter(c => c.example).length; state.cards = state.cards.filter(c => !c.example); commit(); toast(`Removed ${n} example cards`); });
+$('#clearExamples').addEventListener('click', () => { const ex = new Set(pc().filter(c => c.example).map(c => c.id)), n = ex.size; state.cards = state.cards.filter(c => !ex.has(c.id)); commit(); toast(`Removed ${n} example cards`); });
 
 /* ---- card editor ---- */
 const dlg = $('#cardDlg');
@@ -534,10 +592,10 @@ function openCard(id, colId) {
   editing = c ? c.id : null;
   $('#cHead').textContent = c ? 'Edit card' : 'New card';
   $('#cTkt').textContent = c ? `T-${String(c.num).padStart(3, '0')}` : '';
-  $('#cCol').innerHTML = state.columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  $('#cCol').innerHTML = P().columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
   $('#cOwner').innerHTML = `<option value="">Unassigned</option>` + state.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('#cTitle').value = c?.title || '';
-  $('#cCol').value = c?.columnId || colId || (state.columns[1] || state.columns[0]).id;
+  $('#cCol').value = c?.columnId || colId || (P().columns[1] || P().columns[0]).id;
   $('#cOwner').value = c ? (person(c.owner) ? c.owner : '') : (ui.person && ui.person !== '_none' ? ui.person : state.people[0]?.id || '');
   $('#cPriority').value = c?.priority || 'normal';
   $('#cDue').value = c?.due || '';
@@ -571,7 +629,7 @@ $('#cardForm').addEventListener('submit', e => {
     Object.assign(c, data);
     toast('Card saved');
   } else {
-    const c = { id: uid(), num: state.nextNum++, createdAt: now, order: nextOrder(colId), ...data };
+    const c = { id: uid(), projectId: P().id, num: P().nextNum++, createdAt: now, order: nextOrder(colId), ...data };
     markDone(c, colId); state.cards.push(c);
     toast(`Added T-${String(c.num).padStart(3, '0')}`);
   }
@@ -667,10 +725,15 @@ $('#stClose').addEventListener('click', () => stDlg.close());
 $('#stDone').addEventListener('click', () => stDlg.close());
 $('#openSettings').addEventListener('click', () => { renderSettings(); sd.showModal(); });
 $('#sClose').addEventListener('click', () => sd.close());
-sd.addEventListener('close', () => { resetArmed = false; $('#sReset').classList.remove('armed'); $('#sReset').textContent = 'Erase board'; });
+sd.addEventListener('close', () => { pjArmed = null; resetArmed = false; $('#sReset').classList.remove('armed'); $('#sReset').textContent = 'Erase board'; });
 function renderAnySettings() { if (sd.open) renderSettings(); if (stDlg.open) renderStages(); }
 function renderSettings() {
-  $('#sName').value = state.name;
+  $('#sProjects').innerHTML = state.projects.map((p, i) => {
+    const n = state.cards.filter(c => cardProject(c) === p.id).length;
+    return `<div class="ed-row"><input class="inp" id="pj-${p.id}" value="${esc(p.name)}" data-pjname="${p.id}" aria-label="Project name">
+    <button class="btn small" data-pjup="${i}" ${i ? '' : 'disabled'} aria-label="Move up">↑</button><button class="btn small" data-pjdown="${i}" ${i < state.projects.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
+    <button class="btn small danger${pjArmed === p.id ? ' armed' : ''}" data-pjrm="${p.id}" ${state.projects.length < 2 ? 'disabled' : ''}>${pjArmed === p.id ? `Delete ${n} card${n === 1 ? '' : 's'} too?` : 'Delete'}</button></div>`;
+  }).join('');
   $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
   renderStages();
   $('#sSaveFile').hidden = window.top !== window;
@@ -678,20 +741,22 @@ function renderSettings() {
   $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
 }
 function renderStages() {
-  $('#sCols').innerHTML = state.columns.map((c, i) => `<div class="ed-row"><input class="inp" id="cn-${c.id}" value="${esc(c.name)}" data-cname="${c.id}" aria-label="Stage name">
+  $('#sCols').innerHTML = P().columns.map((c, i) => `<div class="ed-row"><input class="inp" id="cn-${c.id}" value="${esc(c.name)}" data-cname="${c.id}" aria-label="Stage name">
     <input class="inp" id="cl-${c.id}" type="number" min="0" style="flex:0 0 64px" value="${c.limit || ''}" placeholder="Limit" data-climit="${c.id}" aria-label="Card limit">
     <label class="chk"><input type="checkbox" id="cd-${c.id}" data-cdone="${c.id}" ${c.done ? 'checked' : ''}>Finish</label>
-    <button class="btn small" data-cup="${i}" ${i ? '' : 'disabled'} aria-label="Move up">↑</button><button class="btn small" data-cdown="${i}" ${i < state.columns.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
+    <button class="btn small" data-cup="${i}" ${i ? '' : 'disabled'} aria-label="Move up">↑</button><button class="btn small" data-cdown="${i}" ${i < P().columns.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
     <button class="btn small" data-crm="${c.id}" aria-label="Delete stage">✕</button></div>`).join('');
 }
-$('#sName').addEventListener('change', e => { state.name = e.target.value.trim() || 'Work Board'; commit(); });
+let pjArmed = null;
+$('#sNewProject').addEventListener('click', () => { sd.close(); openNewProject(); });
 $('#sAddPerson').addEventListener('click', () => { const n = $('#sNewPerson').value.trim(); if (!n) return; state.people.push({ id: uid(), name: n, color: COLORS[state.people.length % COLORS.length] }); $('#sNewPerson').value = ''; commit(); renderAnySettings(); toast(`Added ${n}`); });
 $('#sNewPerson').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddPerson').click(); });
-$('#sAddCol').addEventListener('click', () => { const n = $('#sNewCol').value.trim(); if (!n) return; const d = state.columns.findIndex(c => c.done); state.columns.splice(d < 0 ? state.columns.length : d, 0, { id: uid(), name: n }); $('#sNewCol').value = ''; commit(); renderAnySettings(); });
+$('#sAddCol').addEventListener('click', () => { const n = $('#sNewCol').value.trim(); if (!n) return; const d = P().columns.findIndex(c => c.done); P().columns.splice(d < 0 ? P().columns.length : d, 0, { id: uid(), name: n }); $('#sNewCol').value = ''; commit(); renderAnySettings(); });
 $('#sNewCol').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddCol').click(); });
 const onSetChange = e => {
   const t = e.target, d = t.dataset;
-  if (d.pname) { const p = person(d.pname); p.name = t.value.trim() || p.name; commit(); }
+  if (d.pjname) { const p = state.projects.find(x => x.id === d.pjname); p.name = t.value.trim() || p.name; commit(); }
+  else if (d.pname) { const p = person(d.pname); p.name = t.value.trim() || p.name; commit(); }
   else if (d.pcolor) { person(d.pcolor).color = t.value; commit(); }
   else if (d.cname) { const c = column(d.cname); c.name = t.value.trim() || c.name; commit(); }
   else if (d.climit) { const v = parseInt(t.value, 10); column(d.climit).limit = v > 0 ? v : 0; commit(); }
@@ -700,12 +765,22 @@ const onSetChange = e => {
 const onSetClick = e => {
   const d = e.target.dataset;
   if (d.prm) { const n = state.cards.filter(c => c.owner === d.prm).length; state.people = state.people.filter(p => p.id !== d.prm); state.cards.forEach(c => { if (c.owner === d.prm) c.owner = ''; }); commit(); renderAnySettings(); toast(n ? `Removed. ${n} cards are now unassigned` : 'Removed'); }
-  if (d.cup || d.cdown) { const i = +(d.cup ?? d.cdown), j = d.cup ? i - 1 : i + 1; [state.columns[i], state.columns[j]] = [state.columns[j], state.columns[i]]; commit(); renderAnySettings(); }
+  if (d.pjup || d.pjdown) { const i = +(d.pjup ?? d.pjdown), j = d.pjup ? i - 1 : i + 1; [state.projects[i], state.projects[j]] = [state.projects[j], state.projects[i]]; commit(); renderAnySettings(); }
+  if (d.pjrm) {
+    if (pjArmed !== d.pjrm) { pjArmed = d.pjrm; return renderAnySettings(); }
+    const first = state.projects[0].id, gone = state.projects.find(x => x.id === d.pjrm);
+    state.cards = state.cards.filter(c => (c.projectId || first) !== d.pjrm);
+    state.cards.forEach(c => { if (!c.projectId) c.projectId = first; });
+    state.projects = state.projects.filter(x => x.id !== d.pjrm); pjArmed = null;
+    if (ui.project === d.pjrm) { ui.project = state.projects[0].id; saveUi(); }
+    commit(); renderAnySettings(); toast(`Deleted ${gone.name}`);
+  }
+  if (d.cup || d.cdown) { const i = +(d.cup ?? d.cdown), j = d.cup ? i - 1 : i + 1; [P().columns[i], P().columns[j]] = [P().columns[j], P().columns[i]]; commit(); renderAnySettings(); }
   if (d.crm) {
-    if (state.columns.length < 2) return toast('A board needs at least one stage');
+    if (P().columns.length < 2) return toast('A board needs at least one stage');
     const n = state.cards.filter(c => c.columnId === d.crm).length;
     if (n) return toast(`Move its ${n} cards to another stage first`);
-    state.columns = state.columns.filter(c => c.id !== d.crm); commit(); renderAnySettings();
+    P().columns = P().columns.filter(c => c.id !== d.crm); commit(); renderAnySettings();
   }
 };
 [sd, stDlg].forEach(dl => { dl.addEventListener("change", onSetChange); dl.addEventListener("click", onSetClick); });
@@ -721,7 +796,7 @@ $('#sSaveFile').addEventListener('click', () => {
 function restore(text) {
   let d; try { d = JSON.parse(text); } catch (e) { return toast('That backup is not valid. Paste the whole text you copied'); }
   if (!valid(d)) return toast('That text is not a work board backup');
-  delete d.exportedAt; state = d; state.nextNum = Math.max(state.nextNum || 1, ...state.cards.map(c => c.num + 1)); commit(); renderAnySettings(); $('#sPaste').value = ''; toast(`Restored ${state.cards.length} cards`);
+  delete d.exportedAt; state = norm(d); state.projects.forEach(p => { p.nextNum = Math.max(p.nextNum || 1, ...state.cards.filter(c => cardProject(c) === p.id).map(c => c.num + 1)); }); commit(); renderAnySettings(); $('#sPaste').value = ''; toast(`Restored ${state.cards.length} cards`);
 }
 $('#sRestore').addEventListener('click', () => { const t = $('#sPaste').value.trim(); if (t) restore(t); else toast('Paste a backup into the box first'); });
 $('#sFile').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(restore); e.target.value = ''; });
@@ -730,7 +805,7 @@ $('#sReset').addEventListener('click', () => {
   const b = $('#sReset');
   if (!resetArmed) { resetArmed = true; b.classList.add('armed'); b.textContent = 'Click again to erase everything'; return; }
   const me = state.people[0] || { id: uid(), name: 'Juan', color: COLORS[0] };
-  state = { version: 1, name: state.name, people: [me], columns: [{ id: uid(), name: 'To do' }, { id: uid(), name: 'In progress' }, { id: uid(), name: 'Done', done: true }], cards: [], nextNum: 1 };
+  state = { version: 2, name: state.name, people: [me], projects: [newProject('My project')], cards: [] };
   resetArmed = false; b.classList.remove('armed'); b.textContent = 'Erase board'; commit(); renderAnySettings(); toast('Board erased');
 });
 
