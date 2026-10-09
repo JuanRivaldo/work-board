@@ -1,5 +1,7 @@
 # Juan's Work Board
 
+**Live app:** https://juanrivaldo.github.io/work-board/
+
 A kanban-style work tracker that runs in any modern browser and installs as an app on Windows and Android (it is a PWA, so one build serves both).
 
 ## What it does
