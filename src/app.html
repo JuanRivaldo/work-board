@@ -473,7 +473,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <div class="sect" hidden><h3>Clear ledger</h3><p id="sLedInfo"></p>
         <div class="ed-row"><button class="btn small danger" id="sLedClear">Remove all entries</button></div></div>
       <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p id="sCalInfo"></p>
-        <label class="field"><span>Add cards to Google as</span><select class="inp" id="sCalKind" style="max-width:320px"><option value="tasks">Tasks (only on your Google account)</option><option value="events">Events (owners are invited)</option></select></label>
+        <label class="field"><span>Add cards to Google as</span><select class="inp" id="sCalKind" style="max-width:320px"><option value="mix">Tasks for me, invites for other owners</option><option value="tasks">Tasks only (just your Google account)</option><option value="events">Events (owners are invited)</option></select></label>
         <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
       <div class="sect"><h3>Start over</h3><p>Erases every project, card, person and stage.</p>
@@ -904,11 +904,17 @@ $('#cNewItem').addEventListener('keydown', e => { if (e.key === 'Enter') { e.pre
 const GKEY = 'workboard.gcal.v1';
 let gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: 'tasks', scope: '' }, gTimer = null, gBusy = false, gErr = '';
 try { Object.assign(gcal, JSON.parse(localStorage.getItem(GKEY) || '{}')); } catch (e) {}
-if (!gcal.tasks) gcal.tasks = {}; if (!gcal.kind) gcal.kind = 'tasks';
+if (!gcal.tasks) gcal.tasks = {}; if (!gcal.kindChosen) gcal.kind = 'mix'; // until someone picks in settings
 /* Cards go to Google as Tasks (the default; they show in Google Calendar and Tasks for the connected account) or as
    calendar events that invite the owners. Switching removes what the other kind created. */
 const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks', CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const needsTasksScope = () => gcal.kind === 'tasks' && !(gcal.scope || '').includes(TASKS_SCOPE);
+const needsTasksScope = () => gcal.kind !== 'events' && !(gcal.scope || '').includes(TASKS_SCOPE);
+/* "mix": cards you own (or nobody owns) become tasks in your account; cards with other owners also become an
+   event that invites those owners, since Google can't put a task into someone else's account. */
+function boardMe() { const email = backend && backend.email; return (email && state.people.find(x => x.email && x.email.toLowerCase() === email.toLowerCase())) || state.people[0]; }
+const othersOf = c => { const me = boardMe(); return ownersOf(c).filter(p => p !== me); };
+const wantsTask = c => gcal.kind === 'tasks' || (gcal.kind === 'mix' && (!ownerIds(c).length || ownersOf(c).includes(boardMe())));
+const wantsEvent = c => gcal.kind === 'events' || (gcal.kind === 'mix' && othersOf(c).some(p => p.email));
 function saveG() { try { localStorage.setItem(GKEY, JSON.stringify(gcal)); } catch (e) {} }
 function gcalAvailable() { return !!(window.WB_SUPA && window.WB_SUPA.googleClientId) && window.top === window; }
 const gcalLive = () => !!gcal.token && Date.now() < gcal.exp;
@@ -975,7 +981,7 @@ async function syncCal() {
   if (gBusy || !gcalLive() || needsTasksScope()) { renderStrip(); return; }
   gBusy = true; renderStrip();
   try {
-    const wantT = {}; if (gcal.kind === 'tasks') state.cards.forEach(c => { const t = calTask(c); if (t) wantT[c.id] = t; });
+    const wantT = {}; state.cards.forEach(c => { const t = wantsTask(c) && calTask(c); if (t) wantT[c.id] = t; });
     for (const [cid, t] of Object.entries(wantT)) {
       const sig = JSON.stringify(t), have = gcal.tasks[cid]; if (have && have.sig === sig) continue;
       let r = have ? await taskApi('PATCH', `/${have.id}`, t) : null;
@@ -987,7 +993,7 @@ async function syncCal() {
       const r = await taskApi('DELETE', `/${gcal.tasks[cid].id}`);
       if (r.ok || r.status === 404 || r.status === 410) { delete gcal.tasks[cid]; saveG(); } else throw new Error(await taskErr(r));
     }
-    const want = {}; if (gcal.kind === 'events') state.cards.forEach(c => { const ev = calEvent(c); if (ev) want[evId(c)] = ev; });
+    const want = {}; state.cards.forEach(c => { const ev = wantsEvent(c) && calEvent(c); if (ev) { if (gcal.kind === 'mix') ev.attendees = othersOf(c).map(p => p.email).filter(Boolean).map(email => ({ email })); want[evId(c)] = ev; } });
     for (const [id, ev] of Object.entries(want)) {
       const sig = JSON.stringify(ev); if (gcal.sigs[id] === sig) continue;
       let r = await calApi('PATCH', `/${id}?sendUpdates=all`, ev);
@@ -1567,6 +1573,7 @@ function updateShare() {
   const auto = gcalAvailable() && gcal.on;
   cal.hidden = auto;
   const missing = noEmail.length ? ` Add an email for ${noEmail.map(p => p.name).join(', ')} in Board settings to include ${noEmail.length > 1 ? 'them' : noEmail[0].name}.` : '';
+  if (auto && gcal.kind === 'mix') { const others = os.filter(p => p !== boardMe()), em = others.map(p => p.email).filter(Boolean); $('#cShareHint').textContent = !due ? 'Set a due date to add it to Google.' : (os.length && !os.includes(boardMe()) ? '' : 'This card shows as a task in your Google Calendar. ') + (em.length ? `${em.join(', ')} get${em.length > 1 ? '' : 's'} a calendar invite.` : '') + (others.some(p => !p.email) ? ` Add an email for ${others.filter(p => !p.email).map(p => p.name).join(', ')} in Board settings to invite them too.` : ''); return; }
   if (auto && gcal.kind === 'tasks') { $('#cShareHint').textContent = due ? 'This card shows as a task in your Google Calendar and Google Tasks.' : 'Set a due date to add it to Google Tasks.'; return; }
   if (auto) { $('#cShareHint').textContent = due ? 'This card syncs to your Google Calendar automatically' + (emails.length ? ` and invites ${emails.join(', ')}.` : '.') + missing : 'Set a due date to put this card on your Google Calendar.'; return; }
   $('#cShareHint').textContent = (!due ? 'Set a due date to add it to Google Calendar.' : emails.length ? `The calendar event invites ${emails.join(', ')}.` : os.length ? '' : 'Pick owners to invite and email them.') + missing;
@@ -1701,7 +1708,7 @@ function renderSettings() {
   $('#sLedClear').disabled = !nl; ledArmed = false; $('#sLedClear').classList.remove('armed'); $('#sLedClear').textContent = 'Remove all entries';
   $('#sCal').hidden = !gcalAvailable();
   $('#sCalKind').value = gcal.kind;
-  $('#sCalInfo').textContent = gcal.kind === 'tasks' ? 'Cards with a due date appear as tasks in your Google Calendar and Google Tasks. Moving a card to a Finish stage ticks the task off; clearing its due date or deleting the card removes it. Tasks have no time, so a card\'s time is added to its title. Connect on one device only.' : 'Cards with a due date appear as events on your Google Calendar, and the card\'s owners are invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don\'t get duplicate update emails.';
+  $('#sCalInfo').textContent = gcal.kind === 'mix' ? 'Cards you own become tasks in your Google Calendar and Google Tasks. When a card has other owners with an email, they also get a calendar invite for it, because Google can\'t put a task into someone else\'s account. Finish stage ticks your task off and removes the invite. Connect on one device only.' : gcal.kind === 'tasks' ? 'Cards with a due date appear as tasks in your Google Calendar and Google Tasks. Moving a card to a Finish stage ticks the task off; clearing its due date or deleting the card removes it. Tasks have no time, so a card\'s time is added to its title. Connect on one device only.' : 'Cards with a due date appear as events on your Google Calendar, and the card\'s owners are invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don\'t get duplicate update emails.';
   $('#sCalState').textContent = !gcal.on ? 'Not connected on this device.' : gcalLive() ? 'Connected on this device.' : 'Connected, but Google needs you to sign in again.';
   $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() && !needsTasksScope() ? 'Stop syncing' : 'Reconnect';
   $('#sAccount').hidden = !(backend && backend.signOut); if (backend && backend.email) $('#sEmail').textContent = `Signed in as ${backend.email}`;
@@ -1780,9 +1787,9 @@ $('#sReset').addEventListener('click', () => {
 
 window.addEventListener('storage', e => { if (mode === 'local' && e.key === KEY) { state = load(); render(); } });
 $('#doImport').addEventListener('click', importLocal);
-$('#sCalKind').addEventListener('change', e => { gcal.kind = e.target.value; saveG(); renderAnySettings(); renderStrip(); if (needsTasksScope()) connectCal(); else syncCal(); });
+$('#sCalKind').addEventListener('change', e => { gcal.kind = e.target.value; gcal.kindChosen = true; saveG(); renderAnySettings(); renderStrip(); if (needsTasksScope()) connectCal(); else syncCal(); });
 $('#sCalBtn').addEventListener('click', () => {
-  if (gcal.on && gcalLive() && !needsTasksScope()) { gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: gcal.kind, scope: '' }; saveG(); toast('Stopped syncing to Google Calendar. Existing events stay'); renderAnySettings(); renderStrip(); }
+  if (gcal.on && gcalLive() && !needsTasksScope()) { gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: gcal.kind, kindChosen: gcal.kindChosen, scope: '' }; saveG(); toast('Stopped syncing to Google Calendar. Existing events stay'); renderAnySettings(); renderStrip(); }
   else connectCal();
 });
 $('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
