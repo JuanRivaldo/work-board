@@ -258,7 +258,9 @@ table.led tr.opening td { color: var(--muted); font-style: italic; }
 .rc-total small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
 .pay-list { border-top: 1px solid var(--line); padding: 6px 0; background: var(--accent-soft); }
 .pay { display: flex; gap: 6px; padding: 6px 14px; font-size: 14px; }
-.pay .v { margin-left: auto; font-weight: 600; }
+.pay { align-items: center; } .pay .v { margin-left: auto; font-weight: 600; }
+.pay.done { color: var(--muted); } .pay.done .v { font-weight: 400; } .pay small { font-size: 11.5px; }
+.paid-list { border-top: 1px solid var(--line); padding: 4px 0; }
 .guest-wrap { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; max-width: 640px; width: 100%; margin: 0 auto; }
 .guest-wrap h1 { font: 700 22px var(--display); margin: 0; }
 .g-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 14px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
@@ -1162,7 +1164,8 @@ function billSettle(b) {
   const per = b.people.map(p => {
     const items = rc.reduce((t, x) => t + x.c.share[p.id].items, 0), extra = rc.reduce((t, x) => t + x.c.share[p.id].extra, 0);
     const paid = rc.filter(x => x.r.payer === p.id).reduce((t, x) => t + x.c.total, 0);
-    return { p, items, extra, total: items + extra, paid, net: paid - (items + extra) };
+    const sent = (b.payments || []).filter(x => x.from === p.id).reduce((t, x) => t + x.amount, 0), got = (b.payments || []).filter(x => x.to === p.id).reduce((t, x) => t + x.amount, 0);
+    return { p, items, extra, total: items + extra, paid, net: paid - (items + extra) + sent - got };
   });
   const cur = b.currency, eps = 10 ** -moneyDigits(cur) / 2;
   const cred = per.filter(x => x.net > eps).map(x => ({ p: x.p, v: x.net })).sort((a, z) => z.v - a.v);
@@ -1173,7 +1176,9 @@ function billSettle(b) {
     debt[i].v -= v; cred[j].v -= v; if (debt[i].v <= eps) i++; if (cred[j].v <= eps) j++;
   }
   const untagged = rc.flatMap(x => x.c.untagged), unpaid = rc.filter(x => !x.r.payer && x.c.total).map(x => x.r);
-  return { rc, per, transfers, untagged, unpaid, total: rc.reduce((t, x) => t + x.c.total, 0) };
+  const name = id => (b.people.find(p => p.id === id) || {}).name || 'Someone';
+  const payments = (b.payments || []).map(x => ({ ...x, fromName: name(x.from), toName: name(x.to) }));
+  return { rc, per, transfers, untagged, unpaid, payments, total: rc.reduce((t, x) => t + x.c.total, 0) };
 }
 const fmtPlain = n => new Intl.NumberFormat(undefined, { maximumFractionDigits: moneyDigits() }).format(n);
 function billSuggestions(b) {
@@ -1213,7 +1218,7 @@ function renderBills() {
   if (!b) {
     const list = pb().map(normBill).sort((x, y) => (y.date || '').localeCompare(x.date || '') || y.createdAt - x.createdAt);
     $('#bills').innerHTML = list.length ? `<div class="bill-list">${list.map(x => { const st = billSettle(x);
-      return `<button class="bill-tile" data-bill="${x.id}"><b>${esc(x.title || 'Bill')}</b><span class="btot">${fmtMoney(roundMoney(st.total))}</span><span class="sub">${esc(fmtDay(x.date))} · ${x.people.length} people · ${x.receipts.length} bill${x.receipts.length === 1 ? '' : 's'}${x.token ? ' · shared' : ''}</span></button>`; }).join('')}</div>`
+      return `<button class="bill-tile" data-bill="${x.id}"><b>${esc(x.title || 'Bill')}</b><span class="btot">${fmtMoney(roundMoney(st.total))}</span><span class="sub">${esc(fmtDay(x.date))} · ${x.people.length} people · ${x.receipts.length} bill${x.receipts.length === 1 ? '' : 's'}${x.token ? ' · shared' : ''}${st.payments.length && !st.transfers.length && !st.untagged.length ? ' · settled ✓' : st.transfers.length ? ` · ${st.transfers.length} to pay` : ''}</span></button>`; }).join('')}</div>`
       : `<div class="panel"><div class="led-empty">No splits yet. Tap <b>+ New bill</b>, then upload a photo of the receipt or type the items in.</div></div>`;
     return;
   }
@@ -1256,8 +1261,10 @@ function renderBillSummary() {
   if (st.untagged.length) warn.push(`${st.untagged.length} item${st.untagged.length === 1 ? ' has' : 's have'} no one tagged yet (${fmtMoney(roundMoney(st.untagged.reduce((t, i) => t + (Number(i.price) || 0), 0), cur))}).`);
   st.unpaid.forEach(r => warn.push(`Choose who paid ${r.name}.`));
   el.innerHTML = warn.map(w => `<div class="warn-line">${esc(w)}</div>`).join('') +
-    st.per.map(x => `<div class="split-row"><span>${esc(x.p.name)}<small>Had ${fmtMoney(roundMoney(x.total, cur))}${x.paid ? ` · paid ${fmtMoney(roundMoney(x.paid, cur))}` : ''}</small></span><span class="v">${Math.abs(x.net) < 1 ? 'Settled' : x.net > 0 ? `gets back ${fmtMoney(roundMoney(x.net, cur))}` : `owes ${fmtMoney(roundMoney(-x.net, cur))}`}</span></div>`).join('') +
-    (st.transfers.length ? `<div class="pay-list">${st.transfers.map(t => `<div class="pay"><b>${esc(t.from.name)}</b> pays <b>${esc(t.to.name)}</b><span class="v">${fmtMoney(t.amount)}</span></div>`).join('')}</div>` : '') +
+    st.per.map(x => `<div class="split-row"><span>${esc(x.p.name)}<small>Had ${fmtMoney(roundMoney(x.total, cur))}${x.paid ? ` · paid ${fmtMoney(roundMoney(x.paid, cur))}` : ''}</small></span><span class="v">${Math.abs(x.net) < 1 ? 'Settled ✓' : x.net > 0 ? `gets back ${fmtMoney(roundMoney(x.net, cur))}` : `owes ${fmtMoney(roundMoney(-x.net, cur))}`}</span></div>`).join('') +
+    (st.transfers.length ? `<div class="pay-list">${st.transfers.map(t => `<div class="pay"><span><b>${esc(t.from.name)}</b> pays <b>${esc(t.to.name)}</b></span><span class="v">${fmtMoney(t.amount)}</span><button type="button" class="btn small" data-paid="${t.from.id}|${t.to.id}|${t.amount}">Paid</button></div>`).join('')}</div>` : '') +
+    (st.payments.length ? `<div class="paid-list">${st.payments.map(x => `<div class="pay done"><span>✓ <b>${esc(x.fromName)}</b> paid <b>${esc(x.toName)}</b> <small>${esc(ago(x.at))}</small></span><span class="v">${fmtMoney(x.amount)}</span><button type="button" class="btn ghost small" data-unpaid="${x.id}" title="Undo">Undo</button></div>`).join('')}</div>` : '') +
+    (!st.transfers.length && st.payments.length && !st.untagged.length ? '<div class="warn-line" style="color:var(--ok)">Everyone is settled up.</div>' : '') +
     `<div class="split-row total"><span>All bills</span><span class="v">${fmtMoney(roundMoney(st.total, cur))}</span></div>`;
   document.querySelectorAll('#bills .item').forEach(row => { const it = b.receipts.flatMap(r => r.items).find(i => i.id === row.dataset.item); if (it) row.classList.toggle('untagged', !!b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id))); });
 }
@@ -1268,6 +1275,7 @@ function billText(b) {
   st.per.forEach(x => { lines.push(`${x.p.name} had ${fmtMoney(roundMoney(x.total, cur))}`);
     b.receipts.forEach(r => r.items.filter(i => (i.who || []).includes(x.p.id)).forEach(i => { const n = (i.who || []).filter(id => b.people.some(p => p.id === id)).length; lines.push(`  · ${i.name}${n > 1 ? ` (shared by ${n})` : ''}`); })); });
   if (st.transfers.length) { lines.push('', 'To settle:'); st.transfers.forEach(t => lines.push(`${t.from.name} pays ${t.to.name} ${fmtMoney(t.amount)}`)); }
+  if (st.payments.length) { lines.push('', 'Already paid:'); st.payments.forEach(x => lines.push(`✓ ${x.fromName} paid ${x.toName} ${fmtMoney(x.amount)}`)); }
   if (st.untagged.length) lines.push('', `Not tagged yet: ${st.untagged.map(i => i.name).join(', ')}`);
   return lines.join('\n');
 }
@@ -1292,7 +1300,7 @@ $('#bills').addEventListener('click', e => {
     if (b.people.some(p => p.name.toLowerCase() === name.toLowerCase())) return toast(`${name} is already on this split`);
     b.people.push({ id: uid(), name }); touch(b, true); if (!t.dataset.padd) $('#bNewPerson').focus(); return;
   }
-  if (t.dataset.prm) { b.people = b.people.filter(p => p.id !== t.dataset.prm); b.receipts.forEach(r => { r.items.forEach(i => { i.who = (i.who || []).filter(id => id !== t.dataset.prm); }); if (r.payer === t.dataset.prm) r.payer = ''; }); return touch(b, true); }
+  if (t.dataset.prm) { b.people = b.people.filter(p => p.id !== t.dataset.prm); b.receipts.forEach(r => { r.items.forEach(i => { i.who = (i.who || []).filter(id => id !== t.dataset.prm); }); if (r.payer === t.dataset.prm) r.payer = ''; }); b.payments = (b.payments || []).filter(x => x.from !== t.dataset.prm && x.to !== t.dataset.prm); return touch(b, true); }
   if (t.dataset.tag) { const { it } = findItem(b, t.dataset.tag); const w = new Set(it.who || []); w.has(t.dataset.pid) ? w.delete(t.dataset.pid) : w.add(t.dataset.pid); it.who = [...w]; return touch(b, true); }
   if (t.dataset.all) { const { it } = findItem(b, t.dataset.all); const all = b.people.every(p => (it.who || []).includes(p.id)); it.who = all ? [] : b.people.map(p => p.id); return touch(b, true); }
   if (t.dataset.irm) { b.receipts.forEach(r => { r.items = r.items.filter(i => i.id !== t.dataset.irm); }); return touch(b, true); }
@@ -1302,6 +1310,8 @@ $('#bills').addEventListener('click', e => {
     if (t.dataset.armed !== '1') { t.dataset.armed = '1'; t.classList.add('danger', 'armed'); t.textContent = 'Click again to remove'; return; }
     b.receipts = b.receipts.filter(r => r.id !== t.dataset.rcrm); return touch(b, true);
   }
+  if (t.dataset.paid) { const [from, to, amount] = t.dataset.paid.split('|'); (b.payments = b.payments || []).push({ id: uid(), from, to, amount: Number(amount), at: Date.now() }); touch(b); toast('Marked as paid'); return; }
+  if (t.dataset.unpaid) { b.payments = (b.payments || []).filter(x => x.id !== t.dataset.unpaid); touch(b); return; }
   if (t.id === 'bShareOn') {
     t.disabled = true;
     backend.shareReady().then(ok => {
@@ -1383,6 +1393,7 @@ async function startGuest(cfg, token) {
           ${c.extra ? `<p class="hint" style="padding:8px 14px 12px;border-top:1px solid var(--line)">Service, tax and discount (${fmtMoney(roundMoney(c.extra, cur), true)}) are shared by what each person ordered.</p>` : ''}</section>`; }).join('') +
       `<div class="g-me"><div class="g-tot"><span>Your share</span><b>${fmtMoney(roundMoney(x.total, cur))}</b></div>
         ${pays.map(t => `<div class="hint">${t.from.id === me.id ? `You pay <b>${esc(t.to.name)}</b> ${fmtMoney(t.amount)}` : `<b>${esc(t.from.name)}</b> pays you ${fmtMoney(t.amount)}`}</div>`).join('')}
+        ${st.payments.filter(p => p.from === me.id || p.to === me.id).map(p => `<div class="hint" style="color:var(--ok)">✓ ${p.from === me.id ? `You paid <b>${esc(p.toName)}</b>` : `<b>${esc(p.fromName)}</b> paid you`} ${fmtMoney(p.amount)}</div>`).join('')}
         ${st.untagged.length ? `<div class="hint">${st.untagged.length} item${st.untagged.length === 1 ? ' is' : 's are'} still untagged, so shares can still change.</div>` : ''}
         <div class="hint">${saving ? 'Saving…' : 'Saved'}</div></div>`;
   }
