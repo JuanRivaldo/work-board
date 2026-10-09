@@ -1,4 +1,4 @@
-<title>Juan's Work Board</title>
+<title>Personal app</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
@@ -284,7 +284,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 
 <div class="shell">
 <aside class="side" id="side" aria-label="Menu">
-  <div class="side-brand">Personal Use App</div>
+  <div class="side-brand">Personal app</div>
   <nav class="side-nav" aria-label="View">
     <button type="button" data-view="board"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Board</button>
     <button type="button" data-view="bills"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Split bill</button>
@@ -581,7 +581,7 @@ function renderTop() {
   const ps = $('#projSel');
   ps.innerHTML = state.projects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('') + '<option value="__new">+ New project…</option>';
   ps.value = P().id;
-  document.title = `${P().name} · Work Board`;
+  document.title = `${P().name} · Personal app`;
   renderSub();
   const fp = $('#fPerson');
   fp.innerHTML = `<option value="">Everyone</option>` + state.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('') + `<option value="_none">Unassigned</option>`;

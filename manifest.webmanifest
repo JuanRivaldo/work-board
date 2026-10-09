@@ -1,6 +1,6 @@
 {
-  "name": "Juan's Work Board",
-  "short_name": "Work Board",
+  "name": "Personal app",
+  "short_name": "Personal app",
   "description": "Kanban-style work tracker",
   "start_url": "./index.html",
   "scope": "./",
