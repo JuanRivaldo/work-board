@@ -1295,7 +1295,6 @@ const billTyping = () => ui.view === 'bills' && document.activeElement && docume
 
 /* Guest page: someone opened a share link (#bill=<token>). They see only that split, pick or add their name and
    tag what they ordered. Everything goes through the shared_bill* functions; the board stays private. */
-const GKEY2 = 'workboard.guest.v1';
 async function startGuest(cfg, token) {
   mode = 'guest';
   document.querySelector('.shell').style.display = 'none';
@@ -1304,8 +1303,8 @@ async function startGuest(cfg, token) {
   if (!cfg || !window.supabase) return msg('You seem to be offline. Check your connection and reload.');
   const sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
   let bill = null, saving = 0;
-  const mine = () => { try { return JSON.parse(localStorage.getItem(GKEY2) || '{}')[token] || ''; } catch (e) { return ''; } };
-  const setMine = id => { try { const m = JSON.parse(localStorage.getItem(GKEY2) || '{}'); if (id) m[token] = id; else delete m[token]; localStorage.setItem(GKEY2, JSON.stringify(m)); } catch (e) {} };
+  // Who is tagging is kept only for this visit: several people may open the link on the same phone.
+  let meId = ''; const mine = () => meId, setMine = id => { meId = id; window.scrollTo(0, 0); };
   const take = data => { bill = data ? normBill(data) : null; if (bill) state.currency = bill.currency || 'IDR'; };
   async function load() { const { data, error } = await sb.rpc('shared_bill', { p_token: token }); if (error) throw error; take(data); draw(); }
   function draw() {
@@ -1320,7 +1319,8 @@ async function startGuest(cfg, token) {
     }
     const st = billSettle(bill), x = st.per.find(r => r.p.id === me.id);
     const pays = st.transfers.filter(t => t.from.id === me.id || t.to.id === me.id);
-    g.innerHTML = head + `<p class="hint">Tagging as <b>${esc(me.name)}</b> · <button type="button" class="link" id="gSwitch">not you?</button><br>Tap everything you ordered. Shared dishes are split between everyone who taps them.</p>` +
+    g.innerHTML = head + `<div class="ppl"><span class="hint">You are:</span>${bill.people.map(p => `<button type="button" class="tagp" data-me="${p.id}" aria-pressed="${p.id === me.id}">${esc(p.name)}</button>`).join('')}<button type="button" class="link" id="gSwitch">someone else</button></div>
+      <p class="hint">Tap everything <b>${esc(me.name)}</b> ordered. Shared dishes are split between everyone who taps them. When you're done, the next person picks their name above.</p>` +
       st.rc.map(({ r, c }) => { const payer = bill.people.find(p => p.id === r.payer);
         return `<section class="panel"><h3>${esc(r.name)}<span class="hint" style="font-weight:400"> · ${fmtMoney(roundMoney(c.total, cur))}${payer ? ` · paid by ${esc(payer.name)}` : ''}</span></h3>
           ${r.items.map(it => { const on = (it.who || []).includes(me.id), others = (it.who || []).filter(id => id !== me.id).map(id => bill.people.find(p => p.id === id)).filter(Boolean).map(p => p.name);
