@@ -209,6 +209,40 @@ table.led tr.opening td { color: var(--muted); font-style: italic; }
 .bar i { display: block; height: 100%; background: var(--danger); border-radius: 3px; }
 .bar.in i { background: var(--ok); }
 .side-panels { display: grid; gap: 16px; min-width: 0; }
+.bills { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 24px; display: grid; gap: 16px; align-content: start; }
+.bill-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.bill-tile { text-align: left; background: var(--surface); border: 0; border-radius: 8px; box-shadow: var(--shadow); padding: 12px 14px; cursor: pointer; display: grid; gap: 4px; color: var(--ink); font: inherit; }
+.bill-tile:hover { outline: 2px solid var(--accent-soft); }
+.bill-tile b { font: 600 15px var(--display); }
+.bill-tile .btot { font: 600 16px var(--mono); font-variant-numeric: tabular-nums; }
+.bill-tile .sub, .bill-sub { color: var(--muted); font-size: 12.5px; }
+.bill-grid { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .bill-grid { grid-template-columns: 1fr; } }
+.bill-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.bill-head .inp { width: auto; }
+.bill-head #bTitle { flex: 1 1 200px; font: 600 16px var(--display); }
+.bill-body { padding: 0 14px 14px; display: grid; gap: 12px; }
+.ppl { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.pchip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 4px 3px 10px; border-radius: 999px; background: var(--col); font-size: 13px; }
+.pchip button { border: 0; background: transparent; cursor: pointer; color: var(--muted); padding: 0 6px; font-size: 14px; }
+.pchip.add { padding: 3px 10px; border: 1px dashed var(--line); background: transparent; cursor: pointer; color: var(--muted); }
+.items { display: grid; gap: 8px; }
+.item { display: grid; grid-template-columns: 54px minmax(0, 1fr) 130px 32px; gap: 6px; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.item .inp { padding: 6px 8px; }
+@media (max-width: 520px) { .item { grid-template-columns: 40px minmax(0, 1fr) 92px 28px; gap: 4px; } .item .inp { padding: 6px; } }
+.item .price { text-align: right; font-family: var(--mono); }
+.item .who { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 5px; }
+.tagp { border: 1px solid var(--line); background: transparent; border-radius: 999px; padding: 2px 10px; font-size: 12.5px; cursor: pointer; color: var(--muted); }
+.tagp[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.item.untagged .who::before { content: 'Who ordered this?'; color: var(--warn); font-size: 12.5px; margin-right: 4px; align-self: center; }
+.charges { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.charges .inp { text-align: right; font-family: var(--mono); }
+.split-row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 13.5px; }
+.split-row .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.split-row small { display: block; color: var(--muted); font-size: 12px; }
+.split-row.total { font-weight: 600; }
+.warn-line { padding: 8px 14px; color: var(--warn); font-size: 13px; border-top: 1px solid var(--line); }
+.scan { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .cat-row .net { font-size: 12px; color: var(--muted); }
 .cat-row .net b { font: 500 12px var(--mono); }
 .led-empty { padding: 28px 16px; text-align: center; color: var(--muted); }
@@ -242,6 +276,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   <nav class="side-nav" aria-label="View">
     <button type="button" data-view="board"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Board</button>
     <button type="button" data-view="ledger"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M9 9h6M9 13h6M9 17h4"/></svg>Ledger</button>
+    <button type="button" data-view="bills"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Split bill</button>
   </nav>
   <button type="button" class="side-hide" id="hideSide" title="Hide menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Hide menu</button>
 </aside>
@@ -261,6 +296,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
     <button class="btn" id="ledCsv" data-ledger>Copy as CSV</button>
     <button class="btn" id="ledImport" data-ledger>Import</button>
     <button class="btn primary" id="newEntry" title="New entry (N)" data-ledger>+ New entry</button>
+    <button class="btn" id="billBack" data-bills>← All bills</button>
+    <button class="btn primary" id="newBill" title="New bill (N)" data-bills>+ New bill</button>
     <button class="btn stage-btn" id="openStages" title="Edit stages" data-board>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Stages</button>
     <button class="btn icon-btn" id="openSettings" aria-label="Board settings" title="Board settings">
@@ -279,6 +316,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 </div>
 <main class="board" id="board" aria-label="Board columns" data-board></main>
 <main class="ledger" id="ledger" aria-label="Ledger" data-ledger hidden></main>
+<main class="bills" id="bills" aria-label="Split bill" data-bills hidden></main>
 </div>
 </div>
 
@@ -468,7 +506,7 @@ function load() { return norm(loadLocal() || seed()); }
 const defaultColumns = () => [{ id: uid(), name: 'Backlog' }, { id: uid(), name: 'To do' }, { id: uid(), name: 'In progress', limit: 3 }, { id: uid(), name: 'Waiting on others' }, { id: uid(), name: 'Done', done: true }];
 const newProject = (name, columns) => ({ id: uid(), name, columns: columns || defaultColumns(), nextNum: 1 });
 function blankBoard() {
-  return { version: 2, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], projects: [newProject('My project')], cards: [], ledger: [] };
+  return { version: 2, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], projects: [newProject('My project')], cards: [], ledger: [], bills: [] };
 }
 function valid(d) { return d && Array.isArray(d.cards) && Array.isArray(d.people) && ((Array.isArray(d.projects) && d.projects.length) || (Array.isArray(d.columns) && d.columns.length)); }
 /* Boards saved before projects existed had one set of columns; they become the first project. */
@@ -476,6 +514,7 @@ function norm(d) {
   if (!Array.isArray(d.projects) || !d.projects.length) d.projects = [{ id: 'main', name: d.name || 'My project', columns: d.columns || defaultColumns(), nextNum: d.nextNum || 1 }];
   delete d.columns; delete d.nextNum; d.version = 2;
   if (!Array.isArray(d.ledger)) d.ledger = [];
+  if (!Array.isArray(d.bills)) d.bills = [];
   return d;
 }
 function save() { if (mode === 'local') try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
@@ -512,7 +551,7 @@ function matches(card) {
 }
 const sorted = colId => state.cards.filter(c => c.columnId === colId).sort((a, b) => a.order - b.order);
 
-function render() { renderTop(); renderView(); if (ui.view === 'ledger') renderLedger(); else { renderStrip(); renderBoard(); } scheduleCal(); }
+function render() { renderTop(); renderView(); if (ui.view === 'ledger') renderLedger(); else if (ui.view === 'bills') renderBills(); else { renderStrip(); renderBoard(); } scheduleCal(); }
 function renderSub() {
   const open = pc().filter(c => !doneIds().has(c.columnId)).length;
   const sync = mode === 'loading' ? 'Connecting…' : mode === 'local' ? 'Saved on this device' : writing ? 'Saving…' : 'Synced online';
@@ -574,7 +613,7 @@ const IMPKEY = 'workboard.imported.v1';
 const clone = o => JSON.parse(JSON.stringify(o));
 const metaOf = d => { const n = norm({ ...d }); return { version: 2, name: n.name || 'Work Board', people: n.people || [], projects: n.projects, currency: n.currency || 'IDR' }; };
 let backend = null, writing = 0, pendingRender = false;
-const synced = { meta: null, cards: new Map(), led: new Map() }, chains = new Map();
+const synced = { meta: null, cards: new Map(), led: new Map(), bill: new Map() }, chains = new Map();
 function enqueue(key, fn) {
   writing++; renderSub();
   const p = (chains.get(key) || Promise.resolve()).then(fn).catch(writeFail);
@@ -596,11 +635,20 @@ function pushCloud() {
     if (synced.led.get(e.id) !== j) { synced.led.set(e.id, j); const body = JSON.parse(j); enqueue('L:' + e.id, () => backend.setEntry(e.id, body)); }
   }
   for (const id of [...synced.led.keys()]) if (!lids.has(id)) { synced.led.delete(id); enqueue('L:' + id, () => backend.delEntry(id)); }
+  const bids = new Set();
+  for (const b of state.bills) {
+    bids.add(b.id); const j = JSON.stringify(b);
+    if (synced.bill.get(b.id) !== j) { synced.bill.set(b.id, j); const body = JSON.parse(j); enqueue('B:' + b.id, () => backend.setBill(b.id, body)); }
+  }
+  for (const id of [...synced.bill.keys()]) if (!bids.has(id)) { synced.bill.delete(id); enqueue('B:' + id, () => backend.delBill(id)); }
 }
+function applyBills(list) { state.bills = list.map(clone); synced.bill = new Map(state.bills.map(x => [x.id, JSON.stringify(x)])); }
+function applyBill(b) { b = clone(b); const i = state.bills.findIndex(x => x.id === b.id); if (i < 0) state.bills.push(b); else state.bills[i] = b; synced.bill.set(b.id, JSON.stringify(b)); }
+function removeBill(id) { state.bills = state.bills.filter(x => x.id !== id); synced.bill.delete(id); }
 function applyLedger(list) { state.ledger = list.map(clone); synced.led = new Map(state.ledger.map(x => [x.id, JSON.stringify(x)])); }
 function applyEntry(e) { e = clone(e); const i = state.ledger.findIndex(x => x.id === e.id); if (i < 0) state.ledger.push(e); else state.ledger[i] = e; synced.led.set(e.id, JSON.stringify(e)); }
 function removeEntry(id) { state.ledger = state.ledger.filter(x => x.id !== id); synced.led.delete(id); }
-function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); Object.assign(state, m); delete state.columns; delete state.nextNum; if (!state.ledger) state.ledger = []; }
+function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); Object.assign(state, m); delete state.columns; delete state.nextNum; if (!state.ledger) state.ledger = []; if (!state.bills) state.bills = []; }
 function applyCards(list) { state.cards = list.map(clone); synced.cards = new Map(state.cards.map(x => [x.id, JSON.stringify(x)])); }
 function applyCard(c) { c = clone(c); const i = state.cards.findIndex(x => x.id === c.id); if (i < 0) state.cards.push(c); else state.cards[i] = c; synced.cards.set(c.id, JSON.stringify(c)); }
 function removeCard(id) { state.cards = state.cards.filter(x => x.id !== id); synced.cards.delete(id); }
@@ -626,9 +674,11 @@ async function start() {
   }
   let db = null; try { db = await c.use('db'); } catch (e) {}
   if (!db) return goLocal();
-  const metaRef = db.doc('board/meta'), cardsCol = db.collection('cards'), ledCol = db.collection('ledger');
+  const metaRef = db.doc('board/meta'), cardsCol = db.collection('cards'), ledCol = db.collection('ledger'), billCol = db.collection('bills');
   backend = { setMeta: b => metaRef.set(b), setCard: (id, b) => cardsCol.doc(id).set(b), delCard: id => cardsCol.doc(id).delete(),
-    setEntry: (id, b) => ledCol.doc(id).set(b), delEntry: id => ledCol.doc(id).delete() };
+    setEntry: (id, b) => ledCol.doc(id).set(b), delEntry: id => ledCol.doc(id).delete(),
+    setBill: (id, b) => billCol.doc(id).set(b), delBill: id => billCol.doc(id).delete() };
+  billCol.onSnapshot(s => { applyBills(s.docs.map(d => ({ ...d.data(), id: d.id }))); scheduleRender(); }, () => {});
   ledCol.onSnapshot(s => { applyLedger(s.docs.map(d => ({ ...d.data(), id: d.id }))); scheduleRender(); }, () => {});
   let gotMeta = false, gotCards = false;
   const ready = () => { if (gotMeta && gotCards && mode === 'loading') { mode = 'cloud'; checkImport(); } scheduleRender(); };
@@ -655,6 +705,8 @@ async function startSupabase(cfg) {
     delCard: id => T().delete().eq('board_id', uid).eq('id', 'card:' + id).then(chk),
     setEntry: (id, b) => T().upsert({ board_id: uid, id: 'led:' + id, data: b }).then(chk),
     delEntry: id => T().delete().eq('board_id', uid).eq('id', 'led:' + id).then(chk),
+    setBill: (id, b) => T().upsert({ board_id: uid, id: 'bill:' + id, data: b }).then(chk),
+    delBill: id => T().delete().eq('board_id', uid).eq('id', 'bill:' + id).then(chk),
     signOut: () => sb.auth.signOut().then(() => location.reload())
   };
   const loadAll = async () => {
@@ -662,14 +714,17 @@ async function startSupabase(cfg) {
     const meta = data.find(r => r.id === 'meta'); if (meta) applyMeta(meta.data);
     applyCards(data.filter(r => r.id.startsWith('card:')).map(r => r.data));
     applyLedger(data.filter(r => r.id.startsWith('led:')).map(r => r.data));
+    applyBills(data.filter(r => r.id.startsWith('bill:')).map(r => r.data));
   };
   await loadAll();
   mode = 'cloud'; checkImport(); render();
   sb.channel('items-' + uid).on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: 'board_id=eq.' + uid }, p => {
     const row = p.eventType === 'DELETE' ? p.old : p.new; if (!row || !row.id) return;
-    const led = row.id.startsWith('led:'), key = row.id === 'meta' ? 'meta' : led ? 'L:' + row.id.slice(4) : row.id.slice(5);
+    const led = row.id.startsWith('led:'), bill = row.id.startsWith('bill:');
+    const key = row.id === 'meta' ? 'meta' : led ? 'L:' + row.id.slice(4) : bill ? 'B:' + row.id.slice(5) : row.id.slice(5);
     if (chains.has(key)) return; // our own write is still in flight
     if (key === 'meta') { if (p.new && p.new.data) applyMeta(p.new.data); }
+    else if (bill) { if (p.eventType === 'DELETE') removeBill(row.id.slice(5)); else applyBill(p.new.data); }
     else if (led) { if (p.eventType === 'DELETE') removeEntry(row.id.slice(4)); else applyEntry(p.new.data); }
     else if (p.eventType === 'DELETE') removeCard(key); else applyCard(p.new.data);
     scheduleRender();
@@ -883,6 +938,7 @@ function renderView() {
   document.querySelectorAll('#side [data-view]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === ui.view)));
   document.querySelectorAll('[data-board]').forEach(el => { el.hidden = ui.view !== 'board'; });
   document.querySelectorAll('[data-ledger]').forEach(el => { el.hidden = ui.view !== 'ledger'; });
+  document.querySelectorAll('[data-bills]').forEach(el => { el.hidden = ui.view !== 'bills'; });
   if (ui.view !== 'board') { $('#exampleNotice').hidden = true; }
 }
 function renderLedger() {
@@ -1000,6 +1056,200 @@ $('#impForm').addEventListener('submit', ev => {
   iRows.forEach((e, i) => { const old = state.ledger.find(x => x.id === e.id); if (old) Object.assign(old, e, { updatedAt: now }); else { state.ledger.push({ ...e, createdAt: now + i, updatedAt: now }); added++; } });
   ui.ledMonth = ''; saveUi(); iDlg.close(); commit(); toast(`Imported ${added} new entries` + (iRows.length - added ? `, updated ${iRows.length - added}` : ''));
 });
+/* ---- Split bill: items from a receipt photo (read in the browser), tag who had what, pick who paid.
+   Service, tax and discount are shared in proportion to what each person ordered. ---- */
+const pb = () => { const id = P().id, first = state.projects[0].id; return state.bills.filter(b => (b.projectId || first) === id); };
+const curBill = () => pb().find(b => b.id === ui.bill);
+let billArmed = false, scanState = '';
+function persist() { if (mode === 'local') save(); else if (mode === 'cloud') pushCloud(); }
+function newBill() {
+  const b = { id: uid(), projectId: P().id, title: 'Dinner', date: isoDay(new Date()), people: [], items: [], service: 0, tax: 0, discount: 0, payer: '', createdAt: Date.now(), updatedAt: Date.now() };
+  state.bills.push(b); ui.bill = b.id; ui.view = 'bills'; saveUi(); commit();
+}
+function billCalc(b) {
+  const sub = {}, untagged = [];
+  b.people.forEach(p => { sub[p.id] = 0; });
+  let itemsTotal = 0;
+  for (const it of b.items) {
+    const price = Number(it.price) || 0; itemsTotal += price;
+    const who = (it.who || []).filter(id => id in sub);
+    if (!who.length) { if (price) untagged.push(it); continue; }
+    who.forEach(id => { sub[id] += price / who.length; });
+  }
+  const tagged = Object.values(sub).reduce((t, v) => t + v, 0), extra = (Number(b.service) || 0) + (Number(b.tax) || 0) - (Number(b.discount) || 0);
+  const per = b.people.map(p => { const s = sub[p.id], share = tagged ? extra * s / tagged : 0; return { p, items: s, extra: share, total: s + share }; });
+  return { per, itemsTotal, total: itemsTotal + extra, untagged, extra };
+}
+const roundMoney = n => { const d = CUR_DIGITS[state.currency || 'IDR'] ?? 2; const f = 10 ** d; return Math.round(n * f) / f; };
+function renderBills() {
+  $('#billBack').hidden = !curBill(); $('#newBill').hidden = !!curBill();
+  const b = curBill();
+  if (!b) {
+    const list = pb().slice().sort((x, y) => (y.date || '').localeCompare(x.date || '') || y.createdAt - x.createdAt);
+    $('#bills').innerHTML = list.length ? `<div class="bill-list">${list.map(x => { const c = billCalc(x), payer = x.people.find(p => p.id === x.payer);
+      return `<button class="bill-tile" data-bill="${x.id}"><b>${esc(x.title || 'Bill')}</b><span class="btot">${fmtMoney(roundMoney(c.total))}</span><span class="sub">${esc(fmtDay(x.date))} · ${x.people.length} people · ${x.items.length} items${payer ? ' · paid by ' + esc(payer.name) : ''}</span></button>`; }).join('')}</div>`
+      : `<div class="panel"><div class="led-empty">No bills yet. Tap <b>+ New bill</b>, then upload a photo of the receipt or type the items in.</div></div>`;
+    return;
+  }
+  const opts = b.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  const suggest = state.people.filter(sp => !b.people.some(p => p.name.toLowerCase() === sp.name.toLowerCase()));
+  $('#bills').innerHTML = `
+    <div class="bill-head"><input class="inp" id="bTitle" value="${esc(b.title)}" aria-label="Bill name" maxlength="80"><input class="inp" id="bDate" type="date" value="${esc(b.date)}" aria-label="Date"></div>
+    <div class="bill-grid">
+      <div style="display:grid;gap:16px;min-width:0">
+        <section class="panel"><h3>1. Upload the bill</h3><div class="bill-body">
+          <div class="scan"><label class="btn primary">Upload bill photo<input type="file" id="bScan" accept="image/*" hidden></label><span class="hint" id="bScanState">${esc(scanState)}</span></div>
+          <p class="hint">The items are read from the photo on your device. Check them below, since blurry photos can come out wrong. You can also type items in yourself.</p>
+        </div></section>
+        <section class="panel"><h3>2. Who was there</h3><div class="bill-body">
+          <div class="ppl">${b.people.map(p => `<span class="pchip">${esc(p.name)}<button type="button" data-prm="${p.id}" aria-label="Remove ${esc(p.name)}">✕</button></span>`).join('')}
+            ${suggest.map(sp => `<button type="button" class="pchip add" data-padd="${esc(sp.name)}">+ ${esc(sp.name)}</button>`).join('')}</div>
+          <div class="ed-row"><input class="inp" id="bNewPerson" placeholder="Add someone else" maxlength="40"><button type="button" class="btn small" id="bAddPerson">Add</button></div>
+        </div></section>
+        <section class="panel"><h3>3. Items and who ordered them</h3><div class="bill-body">
+          <div class="items">${b.items.map(it => `<div class="item${(it.who || []).some(id => b.people.some(p => p.id === id)) || !b.people.length ? '' : ' untagged'}" data-item="${it.id}">
+            <input class="inp" data-f="qty" value="${esc(String(it.qty || 1))}" inputmode="numeric" aria-label="Quantity">
+            <input class="inp" data-f="name" value="${esc(it.name)}" placeholder="Item" aria-label="Item">
+            <input class="inp price" data-f="price" value="${it.price ? esc(fmtPlain(it.price)) : ''}" inputmode="decimal" placeholder="Price" aria-label="Price">
+            <button type="button" class="btn ghost small" data-irm="${it.id}" aria-label="Remove item">✕</button>
+            <div class="who">${b.people.length > 1 ? `<button type="button" class="tagp" data-all="${it.id}" aria-pressed="${b.people.every(p => (it.who || []).includes(p.id))}">Everyone</button>` : ''}${b.people.map(p => `<button type="button" class="tagp" data-tag="${it.id}" data-pid="${p.id}" aria-pressed="${(it.who || []).includes(p.id)}">${esc(p.name)}</button>`).join('')}</div>
+          </div>`).join('')}</div>
+          <div class="ed-row"><button type="button" class="btn small" id="bAddItem">+ Add item</button><span class="hint">Price is the line total. An item tagged with several people is split equally between them.</span></div>
+          <div class="charges">
+            <label class="field"><span>Service</span><input class="inp" data-c="service" value="${b.service ? esc(fmtPlain(b.service)) : ''}" placeholder="0 or 5%"></label>
+            <label class="field"><span>Tax</span><input class="inp" data-c="tax" value="${b.tax ? esc(fmtPlain(b.tax)) : ''}" placeholder="0 or 10%"></label>
+            <label class="field"><span>Discount</span><input class="inp" data-c="discount" value="${b.discount ? esc(fmtPlain(b.discount)) : ''}" placeholder="0"></label>
+          </div>
+          <p class="hint">Type an amount, or a percentage like 10%. Service is a percentage of the items, and tax of the items plus service.</p>
+        </div></section>
+      </div>
+      <div style="display:grid;gap:16px;min-width:0">
+        <section class="panel"><h3>4. Who paid</h3><div class="bill-body"><select class="inp" id="bPayer"><option value="">Choose who paid</option>${opts}</select></div><div id="bSummary"></div></section>
+        <div class="ed-row" style="flex-wrap:wrap"><button type="button" class="btn" id="bCopy">Copy summary</button><span class="sp"></span><button type="button" class="btn danger" id="bDelete">Delete bill</button></div>
+      </div>
+    </div>`;
+  $('#bPayer').value = b.payer && b.people.some(p => p.id === b.payer) ? b.payer : '';
+  billArmed = false; renderBillSummary();
+}
+const fmtPlain = n => new Intl.NumberFormat(undefined, { maximumFractionDigits: CUR_DIGITS[state.currency || 'IDR'] ?? 2 }).format(n);
+function renderBillSummary() {
+  const b = curBill(), el = $('#bSummary'); if (!b || !el) return;
+  const c = billCalc(b), payer = b.people.find(p => p.id === b.payer);
+  const rows = c.per.map(r => `<div class="split-row"><span>${esc(r.p.name)}<small>${fmtMoney(roundMoney(r.items))} items${r.extra ? ` ${r.extra > 0 ? '+' : '−'} ${fmtMoney(roundMoney(Math.abs(r.extra)))} charges` : ''}</small></span><span class="v">${fmtMoney(roundMoney(r.total))}${payer && r.p.id !== payer.id && r.total ? `<small>owes ${esc(payer.name)}</small>` : payer && r.p.id === payer.id ? '<small>paid the bill</small>' : ''}</span></div>`).join('');
+  el.innerHTML = (c.untagged.length ? `<div class="warn-line">${c.untagged.length} item${c.untagged.length === 1 ? ' has' : 's have'} no one tagged yet (${fmtMoney(roundMoney(c.untagged.reduce((t, i) => t + (Number(i.price) || 0), 0)))}).</div>` : '') +
+    (b.people.length ? rows : '<div class="warn-line">Add the people who were there.</div>') +
+    `<div class="split-row total"><span>Bill total<small>${fmtMoney(roundMoney(c.itemsTotal))} items${c.extra ? ` ${c.extra > 0 ? '+' : '−'} ${fmtMoney(roundMoney(Math.abs(c.extra)))} charges` : ''}</small></span><span class="v">${fmtMoney(roundMoney(c.total))}${b.scannedTotal ? `<small>receipt says ${fmtMoney(b.scannedTotal)}${Math.abs(b.scannedTotal - c.total) >= 1 ? ' · check the items' : ' ✓'}</small>` : ''}</span></div>`;
+  document.querySelectorAll('#bills .item').forEach(row => { const it = b.items.find(i => i.id === row.dataset.item); if (it) row.classList.toggle('untagged', !!b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id))); });
+}
+function billText(b) {
+  const c = billCalc(b), payer = b.people.find(p => p.id === b.payer);
+  const lines = [`${b.title} · ${fmtDay(b.date)}`, `Total ${fmtMoney(roundMoney(c.total))}${payer ? `, paid by ${payer.name}` : ''}`, ''];
+  c.per.forEach(r => { lines.push(`${r.p.name}: ${fmtMoney(roundMoney(r.total))}${payer && r.p.id !== payer.id && r.total ? ` → pay ${payer.name}` : ''}`);
+    b.items.filter(i => (i.who || []).includes(r.p.id)).forEach(i => { const n = (i.who || []).filter(id => b.people.some(p => p.id === id)).length; lines.push(`  · ${i.name}${n > 1 ? ` (shared by ${n})` : ''}`); }); });
+  if (c.untagged.length) lines.push('', `Not tagged yet: ${c.untagged.map(i => i.name).join(', ')}`);
+  return lines.join('\n');
+}
+function touch(b, rerender) { b.updatedAt = Date.now(); persist(); if (rerender) renderBills(); else renderBillSummary(); }
+function chargeValue(b, field, v) {
+  v = String(v).trim(); if (!v) return 0;
+  if (v.endsWith('%')) { const pct = parseFloat(v.replace(',', '.')) || 0, items = billCalc({ ...b, service: 0, tax: 0, discount: 0 }).itemsTotal;
+    const base = field === 'tax' ? items + (Number(b.service) || 0) : items; return roundMoney(base * pct / 100); }
+  return Math.abs(parseAmount(v));
+}
+$('#newBill').addEventListener('click', newBill);
+$('#billBack').addEventListener('click', () => { ui.bill = ''; saveUi(); render(); });
+$('#bills').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.bill) { ui.bill = t.dataset.bill; saveUi(); scanState = ''; return render(); }
+  const b = curBill(); if (!b) return;
+  if (t.dataset.padd || t.id === 'bAddPerson') {
+    const name = (t.dataset.padd || $('#bNewPerson').value).trim(); if (!name) return $('#bNewPerson').focus();
+    if (b.people.some(p => p.name.toLowerCase() === name.toLowerCase())) return toast(`${name} is already on this bill`);
+    const np = { id: uid(), name }; b.people.push(np); if (b.people.length === 1 && !b.payer) b.payer = np.id;
+    touch(b, true); if (!t.dataset.padd) $('#bNewPerson').focus(); return;
+  }
+  if (t.dataset.prm) { b.people = b.people.filter(p => p.id !== t.dataset.prm); b.items.forEach(i => { i.who = (i.who || []).filter(id => id !== t.dataset.prm); }); if (b.payer === t.dataset.prm) b.payer = ''; return touch(b, true); }
+  if (t.dataset.tag) { const it = b.items.find(i => i.id === t.dataset.tag); const w = new Set(it.who || []); w.has(t.dataset.pid) ? w.delete(t.dataset.pid) : w.add(t.dataset.pid); it.who = [...w]; return touch(b, true); }
+  if (t.dataset.all) { const it = b.items.find(i => i.id === t.dataset.all); const all = b.people.every(p => (it.who || []).includes(p.id)); it.who = all ? [] : b.people.map(p => p.id); return touch(b, true); }
+  if (t.dataset.irm) { b.items = b.items.filter(i => i.id !== t.dataset.irm); return touch(b, true); }
+  if (t.id === 'bAddItem') { b.items.push({ id: uid(), qty: 1, name: '', price: 0, who: [] }); touch(b, true); const rows = document.querySelectorAll('#bills .item [data-f="name"]'); if (rows.length) rows[rows.length - 1].focus(); return; }
+  if (t.id === 'bCopy') return navigator.clipboard.writeText(billText(b)).then(() => toast('Summary copied. Paste it into your chat'), () => toast('Copying is blocked here. Try from the installed app or another browser'));
+  if (t.id === 'bDelete') {
+    if (!billArmed) { billArmed = true; t.classList.add('armed'); t.textContent = 'Click again to delete'; return; }
+    state.bills = state.bills.filter(x => x.id !== b.id); ui.bill = ''; saveUi(); commit(); toast('Bill deleted');
+  }
+});
+$('#bills').addEventListener('input', e => {
+  const b = curBill(); if (!b) return; const t = e.target, row = t.closest('[data-item]');
+  if (row) { const it = b.items.find(i => i.id === row.dataset.item); if (!it) return;
+    if (t.dataset.f === 'name') it.name = t.value; else if (t.dataset.f === 'qty') it.qty = Math.max(1, parseInt(t.value, 10) || 1); else if (t.dataset.f === 'price') it.price = Math.abs(parseAmount(t.value)); renderBillSummary(); }
+});
+$('#bills').addEventListener('change', e => {
+  const b = curBill(); if (!b) return; const t = e.target;
+  if (t.id === 'bTitle') { b.title = t.value.trim() || 'Bill'; return touch(b); }
+  if (t.id === 'bDate') { b.date = t.value || b.date; return touch(b); }
+  if (t.id === 'bPayer') { b.payer = t.value; return touch(b); }
+  if (t.dataset.c) { b[t.dataset.c] = chargeValue(b, t.dataset.c, t.value); t.value = b[t.dataset.c] ? fmtPlain(b[t.dataset.c]) : ''; return touch(b); }
+  if (t.closest('[data-item]')) { if (t.dataset.f === 'price') { const it = b.items.find(i => i.id === t.closest('[data-item]').dataset.item); t.value = it.price ? fmtPlain(it.price) : ''; } return touch(b); }
+  if (t.id === 'bScan' && t.files[0]) scanBill(b, t.files[0]);
+});
+$('#bills').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'bNewPerson') { e.preventDefault(); $('#bAddPerson').click(); } });
+
+/* Reading the receipt: Tesseract.js (free, runs in the browser) is loaded the first time a photo is uploaded. */
+let ocrLib = null;
+function loadOcr() {
+  if (window.Tesseract) return Promise.resolve(window.Tesseract);
+  if (!ocrLib) ocrLib = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; sc.onload = () => res(window.Tesseract); sc.onerror = () => { ocrLib = null; rej(new Error('load')); }; document.head.appendChild(sc); });
+  return ocrLib;
+}
+function setScan(t) { scanState = t; const el = $('#bScanState'); if (el) el.textContent = t; }
+async function scanBill(b, file) {
+  setScan('Getting the reader ready…');
+  try {
+    const T = await loadOcr();
+    const r = await T.recognize(file, 'eng', { logger: m => { if (m.status === 'recognizing text') setScan(`Reading the bill… ${Math.round(m.progress * 100)}%`); } });
+    const found = parseReceipt(r.data.text);
+    if (!found.items.length) { setScan('No items found. Try a sharper, straight-on photo, or type the items in.'); return; }
+    found.items.forEach(it => b.items.push({ id: uid(), qty: it.qty, name: it.name, price: it.price, who: [] }));
+    ['service', 'tax', 'discount'].forEach(k => { if (found[k]) b[k] = found[k]; });
+    if (found.total) b.scannedTotal = found.total;
+    scanState = `Found ${found.items.length} items. Check them, then tag who ordered each one.`;
+    touch(b, true);
+  } catch (e) { console.error(e); setScan('Could not read the photo here. Check your connection, or type the items in.'); }
+}
+function parseReceipt(text) {
+  const out = { items: [], service: 0, tax: 0, discount: 0, total: 0 }, zero = (CUR_DIGITS[state.currency || 'IDR'] ?? 2) === 0;
+  let pendingName = '';
+  for (let line of text.split('\n')) {
+    line = line.replace(/\s+/g, ' ').trim(); if (!line) continue;
+    const m = line.match(/(-?\(?(?:rp\.?\s*)?\d{1,3}(?:[.,]\d{3})+(?:[.,]\d{1,2})?|-?\d+(?:[.,]\d{1,2})?)\)?\s*$/i);
+    const low = line.toLowerCase(), letters = line.replace(/[^a-z]/gi, '').length;
+    if (!m) { if (letters >= 3 && !/total|tax|pajak|service|cash|change|kembali|table|meja|kasir|cashier|tanggal|date|bill|receipt|struk/i.test(low)) pendingName = line; continue; }
+    const amount = Math.abs(parseAmount(m[1])); if (!amount || (zero && amount < 500)) continue;
+    const before = line.slice(0, m.index).trim();
+    if (/sub ?total/.test(low)) { pendingName = ''; continue; }
+    if (/service|svc|serv\b|layanan/.test(low)) { out.service += amount; pendingName = ''; continue; }
+    if (/tax|pajak|pb ?1|ppn|vat/.test(low)) { out.tax += amount; pendingName = ''; continue; }
+    if (/disc|diskon|potongan|promo|voucher/.test(low)) { out.discount += amount; pendingName = ''; continue; }
+    if (/total|jumlah|tagihan|grand|amount due|to pay/.test(low)) { out.total = Math.max(out.total, amount); pendingName = ''; continue; }
+    if (/cash|tunai|change|kembali|card|debit|credit|kredit|qris|payment|bayar|visa|master|ovo|gopay|dana|shopeepay|edc/.test(low)) { pendingName = ''; continue; }
+    let name = before.replace(/@\s*[\d.,]+\s*$/, '').trim(), qty = 1;
+    const unit = name.match(/^(.*?)\s*(\d{1,2})\s*[xX×@]\s*[\d.,]+$/); // "Es teh 2 x 12.000"
+    if (unit) { name = unit[1].trim(); qty = Number(unit[2]); }
+    name = name.replace(/\b\d{1,3}(?:[.,]\d{3})+\s*$/, '').trim();
+    const q = unit ? null : name.match(/^(\d{1,2})\s*[xX×]?\s+(.*)$/) || name.match(/^(.*?)\s+[xX×]\s*(\d{1,2})$/);
+    if (q) { if (/^\d/.test(q[1])) { qty = Number(q[1]); name = q[2]; } else { name = q[1]; qty = Number(q[2]); } }
+    if (name.replace(/[^a-z]/gi, '').length < 2) {
+      if (!pendingName) continue; // a line of only numbers with nothing to attach it to
+      const q2 = before.match(/^(\d{1,2})\s*[xX×]/); if (q2) qty = Number(q2[1]);
+      name = pendingName;
+    }
+    pendingName = '';
+    out.items.push({ name: name.replace(/^[^a-z0-9]+/i, '').slice(0, 80), qty, price: amount });
+  }
+  return out;
+}
+window.__parseReceipt = parseReceipt;
 const eDlg = $('#entryDlg'); let editingE = null, eArmed = false;
 function openEntry(id) {
   const e = id ? state.ledger.find(x => x.id === id) : null; editingE = e ? e.id : null; eArmed = false;
@@ -1099,7 +1349,7 @@ $('#cCancel').addEventListener('click', () => dlg.close());
 $('#cClose').addEventListener('click', () => dlg.close());
 $('#newCard').addEventListener('click', () => openCard());
 document.addEventListener('keydown', e => {
-  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); if (ui.view === 'ledger') openEntry(); else openCard(); }
+  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); if (ui.view === 'ledger') openEntry(); else if (ui.view === 'bills') newBill(); else openCard(); }
   if (e.key === 'Enter' && document.activeElement.classList?.contains('card')) openCard(document.activeElement.dataset.id);
   if (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
 });
@@ -1266,7 +1516,7 @@ $('#sReset').addEventListener('click', () => {
   const b = $('#sReset');
   if (!resetArmed) { resetArmed = true; b.classList.add('armed'); b.textContent = 'Click again to erase everything'; return; }
   const me = state.people[0] || { id: uid(), name: 'Juan', color: COLORS[0] };
-  state = { version: 2, name: state.name, people: [me], projects: [newProject('My project')], cards: [], ledger: [], currency: state.currency || 'IDR' };
+  state = { version: 2, name: state.name, people: [me], projects: [newProject('My project')], cards: [], ledger: [], bills: [], currency: state.currency || 'IDR' };
   resetArmed = false; b.classList.remove('armed'); b.textContent = 'Erase board'; commit(); renderAnySettings(); toast('Board erased');
 });
 
