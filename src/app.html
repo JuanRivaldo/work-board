@@ -134,6 +134,12 @@ dialog::backdrop { background: rgba(10,15,13,.45); }
 #sCols .ed-row .inp[data-cname] { flex: 1 1 160px; }
 .stage-btn { gap: 6px; }
 .col-head h2 { cursor: pointer; }
+.ci input[type=checkbox] { width: auto; flex: none; padding: 0; }
+#sPeople .ed-row { flex-wrap: wrap; }
+#sPeople .inp { flex: 1 1 150px; }
+.share { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.share a { text-decoration: none; color: var(--ink); }
+.share a[aria-disabled="true"] { opacity: .4; pointer-events: none; }
 .stamp { font: 12px var(--mono); color: var(--muted); }
 
 .sect { display: grid; gap: 8px; }
@@ -197,6 +203,11 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <div class="checklist" id="cChecklist"></div>
         <input class="inp" id="cNewItem" placeholder="Add a step and press Enter">
       </div>
+      <div class="share">
+        <a class="btn small" id="cCal" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Add to Google Calendar</a>
+        <a class="btn small" id="cMail" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg>Email owner</a>
+        <span class="hint" id="cShareHint"></span>
+      </div>
       <div class="stamp" id="cStamp"></div>
     </div>
     <div class="dlg-foot">
@@ -253,9 +264,9 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <div id="sProjects" class="sect"></div>
         <div class="ed-row"><button class="btn small" id="sNewProject">+ New project</button></div>
       </div>
-      <div class="sect"><h3>People</h3><p>Owners you can assign cards to. Add teammates now so their cards carry over when the board becomes shared.</p>
+      <div class="sect"><h3>People</h3><p>Owners you can assign cards to. Add their email so you can send them a card or a Google Calendar invite from the card.</p>
         <div id="sPeople" class="sect"></div>
-        <div class="ed-row"><input class="inp" id="sNewPerson" placeholder="Name"><button class="btn small" id="sAddPerson">Add person</button></div>
+        <div class="ed-row"><input class="inp" id="sNewPerson" placeholder="Name"><input class="inp" type="email" id="sNewEmail" placeholder="Email (optional)"><button class="btn small" id="sAddPerson">Add person</button></div>
       </div>
       <div class="sect"><h3>Stages</h3><p>Rename, add, remove or reorder the stages on your board.</p>
         <div class="ed-row"><button class="btn small" id="sOpenStages">Edit stages</button></div>
@@ -605,16 +616,40 @@ function openCard(id, colId) {
   renderChecklist();
   $('#cStamp').textContent = c ? `Created ${new Date(c.createdAt).toLocaleString()}` + (c.updatedAt !== c.createdAt ? ` · Updated ${new Date(c.updatedAt).toLocaleString()}` : '') + (c.doneAt && doneIds().has(c.columnId) ? ` · Finished ${new Date(c.doneAt).toLocaleDateString()}` : '') : '';
   $('#cDelete').hidden = !c; disarm();
+  updateShare();
   dlg.showModal();
   if (!c) $('#cTitle').focus();
 }
 function renderChecklist() {
   $('#cChecklist').innerHTML = draftList.map((it, i) => `<div class="ci ${it.done ? 'done' : ''}"><input type="checkbox" id="ck${i}" data-i="${i}" ${it.done ? 'checked' : ''} aria-label="Done"><input type="text" id="ckt${i}" data-i="${i}" value="${esc(it.text)}" aria-label="Step"><button type="button" class="rm" data-rm="${i}" aria-label="Remove step">✕</button></div>`).join('');
+  if (typeof updateShare === 'function') updateShare();
 }
 $('#cChecklist').addEventListener('change', e => { const i = e.target.dataset.i; if (i == null) return; if (e.target.type === 'checkbox') { draftList[i].done = e.target.checked; renderChecklist(); } });
 $('#cChecklist').addEventListener('input', e => { const i = e.target.dataset.i; if (i != null && e.target.type === 'text') draftList[i].text = e.target.value; });
 $('#cChecklist').addEventListener('click', e => { const r = e.target.dataset.rm; if (r != null) { draftList.splice(+r, 1); renderChecklist(); } });
 $('#cNewItem').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v) { draftList.push({ text: v, done: false }); e.target.value = ''; renderChecklist(); } } });
+/* Share a card: a prefilled Google Calendar event (inviting the owner) and an email to the owner. */
+const ymd = s => s.replace(/-/g, '');
+function updateShare() {
+  const title = $('#cTitle').value.trim() || 'Untitled card', due = $('#cDue').value, owner = person($('#cOwner').value);
+  const col = column($('#cCol').value), tkt = $('#cTkt').textContent;
+  const steps = draftList.filter(i => i.text.trim()).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
+  const details = [`${P().name}${col ? ' · ' + col.name : ''}${tkt ? ' · ' + tkt : ''}`, $('#cNotes').value.trim(), steps].filter(Boolean).join('\n\n');
+  const cal = $('#cCal'), mail = $('#cMail');
+  if (due) {
+    const end = new Date(due + 'T00:00:00'); end.setDate(end.getDate() + 1);
+    const q = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${ymd(due)}/${ymd(isoDay(end))}`, details });
+    if (owner && owner.email) q.set('add', owner.email);
+    cal.href = 'https://calendar.google.com/calendar/render?' + q.toString(); cal.removeAttribute('aria-disabled');
+  } else { cal.removeAttribute('href'); cal.setAttribute('aria-disabled', 'true'); }
+  if (owner && owner.email) {
+    const body = `${title}\n${due ? 'Due ' + fmtDay(due) + '\n' : ''}\n${details}`;
+    mail.href = `mailto:${encodeURIComponent(owner.email)}?subject=${encodeURIComponent((tkt ? `[${tkt}] ` : '') + title)}&body=${encodeURIComponent(body)}`; mail.removeAttribute('aria-disabled');
+  } else { mail.removeAttribute('href'); mail.setAttribute('aria-disabled', 'true'); }
+  $('#cShareHint').textContent = !due && !(owner && owner.email) ? 'Set a due date and an owner with an email to use these.' : !due ? 'Set a due date to add it to Google Calendar.' : !(owner && owner.email) ? (owner ? `Add an email for ${owner.name} in Board settings to email them.` : 'Pick an owner to email them.') : `The calendar event invites ${owner.email}.`;
+}
+$('#cardForm').addEventListener('input', updateShare);
+$('#cardForm').addEventListener('change', updateShare);
 $('#cardForm').addEventListener('submit', e => {
   e.preventDefault();
   const title = $('#cTitle').value.trim(); if (!title) return;
@@ -734,7 +769,7 @@ function renderSettings() {
     <button class="btn small" data-pjup="${i}" ${i ? '' : 'disabled'} aria-label="Move up">↑</button><button class="btn small" data-pjdown="${i}" ${i < state.projects.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
     <button class="btn small danger${pjArmed === p.id ? ' armed' : ''}" data-pjrm="${p.id}" ${state.projects.length < 2 ? 'disabled' : ''}>${pjArmed === p.id ? `Delete ${n} card${n === 1 ? '' : 's'} too?` : 'Delete'}</button></div>`;
   }).join('');
-  $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
+  $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><input class="inp" type="email" id="pe-${p.id}" value="${esc(p.email || '')}" data-pemail="${p.id}" placeholder="Email" aria-label="Email for ${esc(p.name)}"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
   renderStages();
   $('#sSaveFile').hidden = window.top !== window;
   $('#sAccount').hidden = !(backend && backend.signOut); if (backend && backend.email) $('#sEmail').textContent = `Signed in as ${backend.email}`;
@@ -749,7 +784,7 @@ function renderStages() {
 }
 let pjArmed = null;
 $('#sNewProject').addEventListener('click', () => { sd.close(); openNewProject(); });
-$('#sAddPerson').addEventListener('click', () => { const n = $('#sNewPerson').value.trim(); if (!n) return; state.people.push({ id: uid(), name: n, color: COLORS[state.people.length % COLORS.length] }); $('#sNewPerson').value = ''; commit(); renderAnySettings(); toast(`Added ${n}`); });
+$('#sAddPerson').addEventListener('click', () => { const n = $('#sNewPerson').value.trim(); if (!n) return; state.people.push({ id: uid(), name: n, email: $('#sNewEmail').value.trim(), color: COLORS[state.people.length % COLORS.length] }); $('#sNewPerson').value = ''; $('#sNewEmail').value = ''; commit(); renderAnySettings(); toast(`Added ${n}`); });
 $('#sNewPerson').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddPerson').click(); });
 $('#sAddCol').addEventListener('click', () => { const n = $('#sNewCol').value.trim(); if (!n) return; const d = P().columns.findIndex(c => c.done); P().columns.splice(d < 0 ? P().columns.length : d, 0, { id: uid(), name: n }); $('#sNewCol').value = ''; commit(); renderAnySettings(); });
 $('#sNewCol').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddCol').click(); });
@@ -757,6 +792,7 @@ const onSetChange = e => {
   const t = e.target, d = t.dataset;
   if (d.pjname) { const p = state.projects.find(x => x.id === d.pjname); p.name = t.value.trim() || p.name; commit(); }
   else if (d.pname) { const p = person(d.pname); p.name = t.value.trim() || p.name; commit(); }
+  else if (d.pemail) { const p = person(d.pemail), v = t.value.trim(); if (v && !t.checkValidity()) return toast('That email address does not look right'); p.email = v; commit(); }
   else if (d.pcolor) { person(d.pcolor).color = t.value; commit(); }
   else if (d.cname) { const c = column(d.cname); c.name = t.value.trim() || c.name; commit(); }
   else if (d.climit) { const v = parseInt(t.value, 10); column(d.climit).limit = v > 0 ? v : 0; commit(); }
