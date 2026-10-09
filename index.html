@@ -243,6 +243,23 @@ table.led tr.opening td { color: var(--muted); font-style: italic; }
 .split-row.total { font-weight: 600; }
 .warn-line { padding: 8px 14px; color: var(--warn); font-size: 13px; border-top: 1px solid var(--line); }
 .scan { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rc-head { display: flex; gap: 8px; align-items: center; padding: 12px 14px 4px; }
+.rc-head .inp { font: 600 15px var(--display); flex: 1; }
+.rc-total { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; border-top: 1px solid var(--line); padding-top: 10px; }
+.rc-total .v, .pay .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
+.rc-total small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
+.pay-list { border-top: 1px solid var(--line); padding: 6px 0; background: var(--accent-soft); }
+.pay { display: flex; gap: 6px; padding: 6px 14px; font-size: 14px; }
+.pay .v { margin-left: auto; font-weight: 600; }
+.guest-wrap { flex: 1; overflow-y: auto; padding: 16px; display: grid; gap: 14px; align-content: start; max-width: 640px; width: 100%; margin: 0 auto; }
+.guest-wrap h1 { font: 700 22px var(--display); margin: 0; }
+.g-item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; padding: 10px 14px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); font: inherit; cursor: pointer; }
+.g-item .box { width: 20px; height: 20px; border: 2px solid var(--line); border-radius: 5px; flex: none; display: grid; place-items: center; font-size: 13px; }
+.g-item[aria-pressed="true"] .box { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.g-item .nm { flex: 1; min-width: 0; } .g-item .nm small { display: block; color: var(--muted); font-size: 12px; }
+.g-item .v { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.g-tot { display: flex; justify-content: space-between; font-weight: 600; font-size: 15px; } .g-tot b { font-family: var(--mono); }
+.g-me { position: sticky; bottom: 0; background: var(--surface); box-shadow: var(--shadow); border-radius: 8px; padding: 12px 14px; display: grid; gap: 4px; }
 .cat-row .net { font-size: 12px; color: var(--muted); }
 .cat-row .net b { font: 500 12px var(--mono); }
 .led-empty { padding: 28px 16px; text-align: center; color: var(--muted); }
@@ -319,6 +336,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 <main class="bills" id="bills" aria-label="Split bill" data-bills hidden></main>
 </div>
 </div>
+<main class="guest-wrap" id="guest" hidden></main>
 
 <dialog id="cardDlg">
   <form class="dlg" id="cardForm" method="dialog">
@@ -658,10 +676,12 @@ function writeFail(e) {
   else if (code === 'quota_exceeded') toast('The online board is full. Delete old cards to add new ones');
   else toast('A change did not save. Check your connection and reload the page');
 }
-function scheduleRender() { if (drag && drag.active) { pendingRender = true; return; } render(); }
+function scheduleRender() { if (drag && drag.active) { pendingRender = true; return; } if (billTyping()) { billFocusRender = true; renderBillSummary(); return; } render(); }
 function goLocal(msg) { mode = 'local'; state = load(); render(); if (msg) toast(msg); }
 function dbFail() { if (mode === 'loading') goLocal('Could not reach the online board. Using this device only'); else toast('Lost the connection to the online board. Reload to reconnect'); }
 async function start() {
+  const shareTok = new URLSearchParams(location.hash.slice(1)).get('bill');
+  if (shareTok) return startGuest(window.WB_SUPA, shareTok);
   render();
   const c = window.claude;
   if (!c || typeof c.use !== 'function') {
@@ -707,6 +727,7 @@ async function startSupabase(cfg) {
     delEntry: id => T().delete().eq('board_id', uid).eq('id', 'led:' + id).then(chk),
     setBill: (id, b) => T().upsert({ board_id: uid, id: 'bill:' + id, data: b }).then(chk),
     delBill: id => T().delete().eq('board_id', uid).eq('id', 'bill:' + id).then(chk),
+    shareReady: () => sb.rpc('shared_bill', { p_token: 'x'.repeat(22) }).then(r => !r.error, () => false),
     signOut: () => sb.auth.signOut().then(() => location.reload())
   };
   const loadAll = async () => {
@@ -886,7 +907,7 @@ function connectCal() {
     toast('Google Calendar connected'); renderStrip(); renderAnySettings(); syncCal();
   } }).requestAccessToken({ prompt: gcal.on ? '' : 'consent' });
 }
-function scheduleCal() { if (!gcal.on || !gcalAvailable() || mode === 'loading') return; clearTimeout(gTimer); gTimer = setTimeout(syncCal, 1200); }
+function scheduleCal() { if (!gcal.on || !gcalAvailable() || mode === 'loading' || mode === 'guest') return; clearTimeout(gTimer); gTimer = setTimeout(syncCal, 1200); }
 async function calApi(method, path, body) {
   const r = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events' + path, { method, headers: { Authorization: 'Bearer ' + gcal.token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   if (r.status === 401) { gcal.token = null; saveG(); throw { auth: true }; }
@@ -1056,144 +1077,286 @@ $('#impForm').addEventListener('submit', ev => {
   iRows.forEach((e, i) => { const old = state.ledger.find(x => x.id === e.id); if (old) Object.assign(old, e, { updatedAt: now }); else { state.ledger.push({ ...e, createdAt: now + i, updatedAt: now }); added++; } });
   ui.ledMonth = ''; saveUi(); iDlg.close(); commit(); toast(`Imported ${added} new entries` + (iRows.length - added ? `, updated ${iRows.length - added}` : ''));
 });
-/* ---- Split bill: items from a receipt photo (read in the browser), tag who had what, pick who paid.
-   Service, tax and discount are shared in proportion to what each person ordered. ---- */
+/* ---- Split bill. One split (an outing) holds one or more receipts; each receipt has its own items, charges and
+   payer. Service, tax and discount are shared within a receipt in proportion to what each person ordered.
+   People on a split are separate from the board's people. A split can be shared by link so guests tag
+   their own items (hosted site only, through the shared_bill* functions in bill-sharing.sql). ---- */
 const pb = () => { const id = P().id, first = state.projects[0].id; return state.bills.filter(b => (b.projectId || first) === id); };
-const curBill = () => pb().find(b => b.id === ui.bill);
-let billArmed = false, scanState = '';
+const curBill = () => { const b = pb().find(b => b.id === ui.bill); if (b) normBill(b); return b; };
+let billArmed = false, scanState = {}, billFocusRender = false;
 function persist() { if (mode === 'local') save(); else if (mode === 'cloud') pushCloud(); }
+const newReceipt = n => ({ id: uid(), name: `Bill ${n}`, items: [], service: 0, tax: 0, discount: 0, payer: '' });
+/* Splits saved before receipts existed had one set of items at the top level. */
+function normBill(b) {
+  if (!Array.isArray(b.receipts)) { b.receipts = [{ id: uid(), name: 'Bill 1', items: b.items || [], service: b.service || 0, tax: b.tax || 0, discount: b.discount || 0, payer: b.payer || '', scannedTotal: b.scannedTotal || 0 }]; ['items', 'service', 'tax', 'discount', 'payer', 'scannedTotal'].forEach(k => delete b[k]); }
+  if (!Array.isArray(b.people)) b.people = [];
+  return b;
+}
 function newBill() {
-  const b = { id: uid(), projectId: P().id, title: 'Dinner', date: isoDay(new Date()), people: [], items: [], service: 0, tax: 0, discount: 0, payer: '', createdAt: Date.now(), updatedAt: Date.now() };
+  const b = { id: uid(), projectId: P().id, title: 'Dinner', date: isoDay(new Date()), people: [], receipts: [newReceipt(1)], currency: state.currency || 'IDR', createdAt: Date.now(), updatedAt: Date.now() };
   state.bills.push(b); ui.bill = b.id; ui.view = 'bills'; saveUi(); commit();
 }
-function billCalc(b) {
-  const sub = {}, untagged = [];
-  b.people.forEach(p => { sub[p.id] = 0; });
+const moneyDigits = cur => CUR_DIGITS[cur || state.currency || 'IDR'] ?? 2;
+const roundMoney = (n, cur) => { const f = 10 ** moneyDigits(cur); return Math.round(n * f) / f; };
+function receiptCalc(r, people) {
+  const sub = {}, untagged = []; people.forEach(p => { sub[p.id] = 0; });
   let itemsTotal = 0;
-  for (const it of b.items) {
+  for (const it of r.items) {
     const price = Number(it.price) || 0; itemsTotal += price;
     const who = (it.who || []).filter(id => id in sub);
     if (!who.length) { if (price) untagged.push(it); continue; }
     who.forEach(id => { sub[id] += price / who.length; });
   }
-  const tagged = Object.values(sub).reduce((t, v) => t + v, 0), extra = (Number(b.service) || 0) + (Number(b.tax) || 0) - (Number(b.discount) || 0);
-  const per = b.people.map(p => { const s = sub[p.id], share = tagged ? extra * s / tagged : 0; return { p, items: s, extra: share, total: s + share }; });
-  return { per, itemsTotal, total: itemsTotal + extra, untagged, extra };
+  const tagged = Object.values(sub).reduce((t, v) => t + v, 0), extra = (Number(r.service) || 0) + (Number(r.tax) || 0) - (Number(r.discount) || 0);
+  const share = {}; people.forEach(p => { share[p.id] = { items: sub[p.id], extra: tagged ? extra * sub[p.id] / tagged : 0 }; });
+  return { share, itemsTotal, extra, total: itemsTotal + extra, untagged };
 }
-const roundMoney = n => { const d = CUR_DIGITS[state.currency || 'IDR'] ?? 2; const f = 10 ** d; return Math.round(n * f) / f; };
+/* Everyone's share across all receipts, what they paid, and the fewest payments that settle it. */
+function billSettle(b) {
+  const rc = b.receipts.map(r => ({ r, c: receiptCalc(r, b.people) }));
+  const per = b.people.map(p => {
+    const items = rc.reduce((t, x) => t + x.c.share[p.id].items, 0), extra = rc.reduce((t, x) => t + x.c.share[p.id].extra, 0);
+    const paid = rc.filter(x => x.r.payer === p.id).reduce((t, x) => t + x.c.total, 0);
+    return { p, items, extra, total: items + extra, paid, net: paid - (items + extra) };
+  });
+  const cur = b.currency, eps = 10 ** -moneyDigits(cur) / 2;
+  const cred = per.filter(x => x.net > eps).map(x => ({ p: x.p, v: x.net })).sort((a, z) => z.v - a.v);
+  const debt = per.filter(x => x.net < -eps).map(x => ({ p: x.p, v: -x.net })).sort((a, z) => z.v - a.v);
+  const transfers = []; let i = 0, j = 0;
+  while (i < debt.length && j < cred.length) {
+    const v = Math.min(debt[i].v, cred[j].v); if (v > eps) transfers.push({ from: debt[i].p, to: cred[j].p, amount: roundMoney(v, cur) });
+    debt[i].v -= v; cred[j].v -= v; if (debt[i].v <= eps) i++; if (cred[j].v <= eps) j++;
+  }
+  const untagged = rc.flatMap(x => x.c.untagged), unpaid = rc.filter(x => !x.r.payer && x.c.total).map(x => x.r);
+  return { rc, per, transfers, untagged, unpaid, total: rc.reduce((t, x) => t + x.c.total, 0) };
+}
+const fmtPlain = n => new Intl.NumberFormat(undefined, { maximumFractionDigits: moneyDigits() }).format(n);
+function billSuggestions(b) {
+  const have = new Set(b.people.map(p => p.name.toLowerCase())), seen = new Map();
+  state.bills.filter(x => x.id !== b.id).sort((x, y) => (y.updatedAt || 0) - (x.updatedAt || 0)).forEach(x => (x.people || []).forEach(p => { const k = p.name.toLowerCase(); if (!have.has(k) && !seen.has(k)) seen.set(k, p.name); }));
+  return [...seen.values()].slice(0, 12);
+}
+const shareLink = b => `${location.origin}${location.pathname}#bill=${b.token}`;
+const canShare = () => mode === 'cloud' && backend && backend.shareReady;
+function receiptHtml(b, r, n) {
+  const opts = b.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  return `<section class="panel" data-rc="${r.id}"><div class="rc-head"><input class="inp" data-rf="name" value="${esc(r.name)}" aria-label="Bill name" maxlength="60">
+      ${b.receipts.length > 1 ? `<button type="button" class="btn ghost small" data-rcrm="${r.id}">Remove</button>` : ''}</div>
+    <div class="bill-body">
+      <div class="scan"><label class="btn">Upload bill photo<input type="file" data-scan="${r.id}" accept="image/*" hidden></label><span class="hint" data-scanstate="${r.id}">${esc(scanState[r.id] || '')}</span></div>
+      <div class="items">${r.items.map(it => `<div class="item${b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id)) ? ' untagged' : ''}" data-item="${it.id}">
+        <input class="inp" data-f="qty" value="${esc(String(it.qty || 1))}" inputmode="numeric" aria-label="Quantity">
+        <input class="inp" data-f="name" value="${esc(it.name)}" placeholder="Item" aria-label="Item">
+        <input class="inp price" data-f="price" value="${it.price ? esc(fmtPlain(it.price)) : ''}" inputmode="decimal" placeholder="Price" aria-label="Price">
+        <button type="button" class="btn ghost small" data-irm="${it.id}" aria-label="Remove item">✕</button>
+        <div class="who">${b.people.length > 1 ? `<button type="button" class="tagp" data-all="${it.id}" aria-pressed="${b.people.every(p => (it.who || []).includes(p.id))}">Everyone</button>` : ''}${b.people.map(p => `<button type="button" class="tagp" data-tag="${it.id}" data-pid="${p.id}" aria-pressed="${(it.who || []).includes(p.id)}">${esc(p.name)}</button>`).join('')}</div>
+      </div>`).join('')}</div>
+      <div class="ed-row"><button type="button" class="btn small" data-iadd="${r.id}">+ Add item</button></div>
+      <div class="charges">
+        <label class="field"><span>Service</span><input class="inp" data-c="service" value="${r.service ? esc(fmtPlain(r.service)) : ''}" placeholder="0 or 5%"></label>
+        <label class="field"><span>Tax</span><input class="inp" data-c="tax" value="${r.tax ? esc(fmtPlain(r.tax)) : ''}" placeholder="0 or 10%"></label>
+        <label class="field"><span>Discount</span><input class="inp" data-c="discount" value="${r.discount ? esc(fmtPlain(r.discount)) : ''}" placeholder="0"></label>
+        <label class="field"><span>Paid by</span><select class="inp" data-rf="payer"><option value="">Who paid?</option>${opts}</select></label>
+      </div>
+      <div class="rc-total" data-rctotal="${r.id}"></div>
+    </div></section>`;
+}
 function renderBills() {
-  $('#billBack').hidden = !curBill(); $('#newBill').hidden = !!curBill();
   const b = curBill();
+  $('#billBack').hidden = !b; $('#newBill').hidden = !!b;
   if (!b) {
-    const list = pb().slice().sort((x, y) => (y.date || '').localeCompare(x.date || '') || y.createdAt - x.createdAt);
-    $('#bills').innerHTML = list.length ? `<div class="bill-list">${list.map(x => { const c = billCalc(x), payer = x.people.find(p => p.id === x.payer);
-      return `<button class="bill-tile" data-bill="${x.id}"><b>${esc(x.title || 'Bill')}</b><span class="btot">${fmtMoney(roundMoney(c.total))}</span><span class="sub">${esc(fmtDay(x.date))} · ${x.people.length} people · ${x.items.length} items${payer ? ' · paid by ' + esc(payer.name) : ''}</span></button>`; }).join('')}</div>`
-      : `<div class="panel"><div class="led-empty">No bills yet. Tap <b>+ New bill</b>, then upload a photo of the receipt or type the items in.</div></div>`;
+    const list = pb().map(normBill).sort((x, y) => (y.date || '').localeCompare(x.date || '') || y.createdAt - x.createdAt);
+    $('#bills').innerHTML = list.length ? `<div class="bill-list">${list.map(x => { const st = billSettle(x);
+      return `<button class="bill-tile" data-bill="${x.id}"><b>${esc(x.title || 'Bill')}</b><span class="btot">${fmtMoney(roundMoney(st.total))}</span><span class="sub">${esc(fmtDay(x.date))} · ${x.people.length} people · ${x.receipts.length} bill${x.receipts.length === 1 ? '' : 's'}${x.token ? ' · shared' : ''}</span></button>`; }).join('')}</div>`
+      : `<div class="panel"><div class="led-empty">No splits yet. Tap <b>+ New bill</b>, then upload a photo of the receipt or type the items in.</div></div>`;
     return;
   }
-  const opts = b.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  const suggest = state.people.filter(sp => !b.people.some(p => p.name.toLowerCase() === sp.name.toLowerCase()));
+  const sug = billSuggestions(b);
   $('#bills').innerHTML = `
-    <div class="bill-head"><input class="inp" id="bTitle" value="${esc(b.title)}" aria-label="Bill name" maxlength="80"><input class="inp" id="bDate" type="date" value="${esc(b.date)}" aria-label="Date"></div>
+    <div class="bill-head"><input class="inp" id="bTitle" value="${esc(b.title)}" aria-label="Name" maxlength="80"><input class="inp" id="bDate" type="date" value="${esc(b.date)}" aria-label="Date"></div>
     <div class="bill-grid">
       <div style="display:grid;gap:16px;min-width:0">
-        <section class="panel"><h3>1. Upload the bill</h3><div class="bill-body">
-          <div class="scan"><label class="btn primary">Upload bill photo<input type="file" id="bScan" accept="image/*" hidden></label><span class="hint" id="bScanState">${esc(scanState)}</span></div>
-          <p class="hint">The items are read from the photo on your device. Check them below, since blurry photos can come out wrong. You can also type items in yourself.</p>
+        <section class="panel"><h3>Who was there</h3><div class="bill-body">
+          <div class="ppl">${b.people.map(p => `<span class="pchip">${esc(p.name)}<button type="button" data-prm="${p.id}" aria-label="Remove ${esc(p.name)}">✕</button></span>`).join('') || '<span class="hint">Add everyone who shared these bills. They don\'t need to be on your board.</span>'}</div>
+          ${sug.length ? `<div class="ppl"><span class="hint">From earlier bills:</span>${sug.map(n => `<button type="button" class="pchip add" data-padd="${esc(n)}">+ ${esc(n)}</button>`).join('')}</div>` : ''}
+          <div class="ed-row"><input class="inp" id="bNewPerson" placeholder="Add a name" maxlength="40"><button type="button" class="btn small" id="bAddPerson">Add</button></div>
         </div></section>
-        <section class="panel"><h3>2. Who was there</h3><div class="bill-body">
-          <div class="ppl">${b.people.map(p => `<span class="pchip">${esc(p.name)}<button type="button" data-prm="${p.id}" aria-label="Remove ${esc(p.name)}">✕</button></span>`).join('')}
-            ${suggest.map(sp => `<button type="button" class="pchip add" data-padd="${esc(sp.name)}">+ ${esc(sp.name)}</button>`).join('')}</div>
-          <div class="ed-row"><input class="inp" id="bNewPerson" placeholder="Add someone else" maxlength="40"><button type="button" class="btn small" id="bAddPerson">Add</button></div>
-        </div></section>
-        <section class="panel"><h3>3. Items and who ordered them</h3><div class="bill-body">
-          <div class="items">${b.items.map(it => `<div class="item${(it.who || []).some(id => b.people.some(p => p.id === id)) || !b.people.length ? '' : ' untagged'}" data-item="${it.id}">
-            <input class="inp" data-f="qty" value="${esc(String(it.qty || 1))}" inputmode="numeric" aria-label="Quantity">
-            <input class="inp" data-f="name" value="${esc(it.name)}" placeholder="Item" aria-label="Item">
-            <input class="inp price" data-f="price" value="${it.price ? esc(fmtPlain(it.price)) : ''}" inputmode="decimal" placeholder="Price" aria-label="Price">
-            <button type="button" class="btn ghost small" data-irm="${it.id}" aria-label="Remove item">✕</button>
-            <div class="who">${b.people.length > 1 ? `<button type="button" class="tagp" data-all="${it.id}" aria-pressed="${b.people.every(p => (it.who || []).includes(p.id))}">Everyone</button>` : ''}${b.people.map(p => `<button type="button" class="tagp" data-tag="${it.id}" data-pid="${p.id}" aria-pressed="${(it.who || []).includes(p.id)}">${esc(p.name)}</button>`).join('')}</div>
-          </div>`).join('')}</div>
-          <div class="ed-row"><button type="button" class="btn small" id="bAddItem">+ Add item</button><span class="hint">Price is the line total. An item tagged with several people is split equally between them.</span></div>
-          <div class="charges">
-            <label class="field"><span>Service</span><input class="inp" data-c="service" value="${b.service ? esc(fmtPlain(b.service)) : ''}" placeholder="0 or 5%"></label>
-            <label class="field"><span>Tax</span><input class="inp" data-c="tax" value="${b.tax ? esc(fmtPlain(b.tax)) : ''}" placeholder="0 or 10%"></label>
-            <label class="field"><span>Discount</span><input class="inp" data-c="discount" value="${b.discount ? esc(fmtPlain(b.discount)) : ''}" placeholder="0"></label>
-          </div>
-          <p class="hint">Type an amount, or a percentage like 10%. Service is a percentage of the items, and tax of the items plus service.</p>
-        </div></section>
+        ${b.receipts.map((r, i) => receiptHtml(b, r, i + 1)).join('')}
+        <div class="ed-row"><button type="button" class="btn" id="bAddReceipt">+ Add another bill</button><span class="hint">For example, dinner paid by one person and dessert paid by another.</span></div>
       </div>
       <div style="display:grid;gap:16px;min-width:0">
-        <section class="panel"><h3>4. Who paid</h3><div class="bill-body"><select class="inp" id="bPayer"><option value="">Choose who paid</option>${opts}</select></div><div id="bSummary"></div></section>
-        <div class="ed-row" style="flex-wrap:wrap"><button type="button" class="btn" id="bCopy">Copy summary</button><span class="sp"></span><button type="button" class="btn danger" id="bDelete">Delete bill</button></div>
+        <section class="panel"><h3>Who owes who</h3><div id="bSummary"></div></section>
+        <section class="panel"><h3>Let people tag their own food</h3><div class="bill-body" id="bShare"></div></section>
+        <div class="ed-row" style="flex-wrap:wrap"><button type="button" class="btn" id="bCopy">Copy summary</button><span class="sp"></span><button type="button" class="btn danger" id="bDelete">Delete</button></div>
       </div>
     </div>`;
-  $('#bPayer').value = b.payer && b.people.some(p => p.id === b.payer) ? b.payer : '';
-  billArmed = false; renderBillSummary();
+  b.receipts.forEach(r => { const sel = document.querySelector(`[data-rc="${r.id}"] [data-rf="payer"]`); sel.value = b.people.some(p => p.id === r.payer) ? r.payer : ''; });
+  billArmed = false; renderShare(b); renderBillSummary();
 }
-const fmtPlain = n => new Intl.NumberFormat(undefined, { maximumFractionDigits: CUR_DIGITS[state.currency || 'IDR'] ?? 2 }).format(n);
+function renderShare(b) {
+  const el = $('#bShare'); if (!el) return;
+  if (!canShare()) { el.innerHTML = '<p class="hint">Sharing works on your online board at juanrivaldo.github.io, after you sign in.</p>'; return; }
+  el.innerHTML = b.token ? `<p class="hint">Anyone with this link can see this split, add their name and tag what they ordered. They don't need an account.</p>
+      <input class="inp" id="bLink" readonly value="${esc(shareLink(b))}">
+      <div class="ed-row" style="flex-wrap:wrap"><button type="button" class="btn small primary" id="bCopyLink">Copy link</button><a class="btn small" target="_blank" rel="noopener" href="https://wa.me/?text=${encodeURIComponent(`Tag what you ordered for ${b.title}: ${shareLink(b)}`)}">Send on WhatsApp</a><span class="sp"></span><button type="button" class="btn small" id="bUnshare">Stop sharing</button></div>`
+    : `<p class="hint">Make a link to send to the group. Each person opens it, picks their name and taps what they ordered.</p><div class="ed-row"><button type="button" class="btn small primary" id="bShareOn">Make a share link</button></div>`;
+}
 function renderBillSummary() {
   const b = curBill(), el = $('#bSummary'); if (!b || !el) return;
-  const c = billCalc(b), payer = b.people.find(p => p.id === b.payer);
-  const rows = c.per.map(r => `<div class="split-row"><span>${esc(r.p.name)}<small>${fmtMoney(roundMoney(r.items))} items${r.extra ? ` ${r.extra > 0 ? '+' : '−'} ${fmtMoney(roundMoney(Math.abs(r.extra)))} charges` : ''}</small></span><span class="v">${fmtMoney(roundMoney(r.total))}${payer && r.p.id !== payer.id && r.total ? `<small>owes ${esc(payer.name)}</small>` : payer && r.p.id === payer.id ? '<small>paid the bill</small>' : ''}</span></div>`).join('');
-  el.innerHTML = (c.untagged.length ? `<div class="warn-line">${c.untagged.length} item${c.untagged.length === 1 ? ' has' : 's have'} no one tagged yet (${fmtMoney(roundMoney(c.untagged.reduce((t, i) => t + (Number(i.price) || 0), 0)))}).</div>` : '') +
-    (b.people.length ? rows : '<div class="warn-line">Add the people who were there.</div>') +
-    `<div class="split-row total"><span>Bill total<small>${fmtMoney(roundMoney(c.itemsTotal))} items${c.extra ? ` ${c.extra > 0 ? '+' : '−'} ${fmtMoney(roundMoney(Math.abs(c.extra)))} charges` : ''}</small></span><span class="v">${fmtMoney(roundMoney(c.total))}${b.scannedTotal ? `<small>receipt says ${fmtMoney(b.scannedTotal)}${Math.abs(b.scannedTotal - c.total) >= 1 ? ' · check the items' : ' ✓'}</small>` : ''}</span></div>`;
-  document.querySelectorAll('#bills .item').forEach(row => { const it = b.items.find(i => i.id === row.dataset.item); if (it) row.classList.toggle('untagged', !!b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id))); });
+  const st = billSettle(b), cur = b.currency;
+  st.rc.forEach(({ r, c }) => { const t = document.querySelector(`[data-rctotal="${r.id}"]`); if (t) t.innerHTML = `<span>${esc(r.name)} total</span><span class="v">${fmtMoney(roundMoney(c.total, cur))}${r.scannedTotal ? `<small>receipt says ${fmtMoney(r.scannedTotal)}${Math.abs(r.scannedTotal - c.total) >= 1 ? ' · check the items' : ' ✓'}</small>` : ''}</span>`; });
+  const warn = [];
+  if (!b.people.length) warn.push('Add the people who were there.');
+  if (st.untagged.length) warn.push(`${st.untagged.length} item${st.untagged.length === 1 ? ' has' : 's have'} no one tagged yet (${fmtMoney(roundMoney(st.untagged.reduce((t, i) => t + (Number(i.price) || 0), 0), cur))}).`);
+  st.unpaid.forEach(r => warn.push(`Choose who paid ${r.name}.`));
+  el.innerHTML = warn.map(w => `<div class="warn-line">${esc(w)}</div>`).join('') +
+    st.per.map(x => `<div class="split-row"><span>${esc(x.p.name)}<small>Had ${fmtMoney(roundMoney(x.total, cur))}${x.paid ? ` · paid ${fmtMoney(roundMoney(x.paid, cur))}` : ''}</small></span><span class="v">${Math.abs(x.net) < 1 ? 'Settled' : x.net > 0 ? `gets back ${fmtMoney(roundMoney(x.net, cur))}` : `owes ${fmtMoney(roundMoney(-x.net, cur))}`}</span></div>`).join('') +
+    (st.transfers.length ? `<div class="pay-list">${st.transfers.map(t => `<div class="pay"><b>${esc(t.from.name)}</b> pays <b>${esc(t.to.name)}</b><span class="v">${fmtMoney(t.amount)}</span></div>`).join('')}</div>` : '') +
+    `<div class="split-row total"><span>All bills</span><span class="v">${fmtMoney(roundMoney(st.total, cur))}</span></div>`;
+  document.querySelectorAll('#bills .item').forEach(row => { const it = b.receipts.flatMap(r => r.items).find(i => i.id === row.dataset.item); if (it) row.classList.toggle('untagged', !!b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id))); });
 }
 function billText(b) {
-  const c = billCalc(b), payer = b.people.find(p => p.id === b.payer);
-  const lines = [`${b.title} · ${fmtDay(b.date)}`, `Total ${fmtMoney(roundMoney(c.total))}${payer ? `, paid by ${payer.name}` : ''}`, ''];
-  c.per.forEach(r => { lines.push(`${r.p.name}: ${fmtMoney(roundMoney(r.total))}${payer && r.p.id !== payer.id && r.total ? ` → pay ${payer.name}` : ''}`);
-    b.items.filter(i => (i.who || []).includes(r.p.id)).forEach(i => { const n = (i.who || []).filter(id => b.people.some(p => p.id === id)).length; lines.push(`  · ${i.name}${n > 1 ? ` (shared by ${n})` : ''}`); }); });
-  if (c.untagged.length) lines.push('', `Not tagged yet: ${c.untagged.map(i => i.name).join(', ')}`);
+  const st = billSettle(b), cur = b.currency, lines = [`${b.title} · ${fmtDay(b.date)}`, `Total ${fmtMoney(roundMoney(st.total, cur))}`];
+  st.rc.forEach(({ r, c }) => { const payer = b.people.find(p => p.id === r.payer); lines.push(`${r.name}: ${fmtMoney(roundMoney(c.total, cur))}${payer ? `, paid by ${payer.name}` : ''}`); });
+  lines.push('');
+  st.per.forEach(x => { lines.push(`${x.p.name} had ${fmtMoney(roundMoney(x.total, cur))}`);
+    b.receipts.forEach(r => r.items.filter(i => (i.who || []).includes(x.p.id)).forEach(i => { const n = (i.who || []).filter(id => b.people.some(p => p.id === id)).length; lines.push(`  · ${i.name}${n > 1 ? ` (shared by ${n})` : ''}`); })); });
+  if (st.transfers.length) { lines.push('', 'To settle:'); st.transfers.forEach(t => lines.push(`${t.from.name} pays ${t.to.name} ${fmtMoney(t.amount)}`)); }
+  if (st.untagged.length) lines.push('', `Not tagged yet: ${st.untagged.map(i => i.name).join(', ')}`);
   return lines.join('\n');
 }
-function touch(b, rerender) { b.updatedAt = Date.now(); persist(); if (rerender) renderBills(); else renderBillSummary(); }
-function chargeValue(b, field, v) {
+function touch(b, rerender) { b.updatedAt = Date.now(); b.currency = state.currency || 'IDR'; persist(); if (rerender) renderBills(); else renderBillSummary(); }
+function chargeValue(r, field, v) {
   v = String(v).trim(); if (!v) return 0;
-  if (v.endsWith('%')) { const pct = parseFloat(v.replace(',', '.')) || 0, items = billCalc({ ...b, service: 0, tax: 0, discount: 0 }).itemsTotal;
-    const base = field === 'tax' ? items + (Number(b.service) || 0) : items; return roundMoney(base * pct / 100); }
+  if (v.endsWith('%')) { const pct = parseFloat(v.replace(',', '.')) || 0, items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
+    return roundMoney((field === 'tax' ? items + (Number(r.service) || 0) : items) * pct / 100); }
   return Math.abs(parseAmount(v));
 }
+const findItem = (b, id) => { for (const r of b.receipts) { const it = r.items.find(i => i.id === id); if (it) return { r, it }; } return {}; };
+const randToken = () => { const a = new Uint8Array(16); crypto.getRandomValues(a); return btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 $('#newBill').addEventListener('click', newBill);
 $('#billBack').addEventListener('click', () => { ui.bill = ''; saveUi(); render(); });
 $('#bills').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
-  if (t.dataset.bill) { ui.bill = t.dataset.bill; saveUi(); scanState = ''; return render(); }
+  if (t.dataset.bill) { ui.bill = t.dataset.bill; saveUi(); scanState = {}; return render(); }
   const b = curBill(); if (!b) return;
   if (t.dataset.padd || t.id === 'bAddPerson') {
     const name = (t.dataset.padd || $('#bNewPerson').value).trim(); if (!name) return $('#bNewPerson').focus();
-    if (b.people.some(p => p.name.toLowerCase() === name.toLowerCase())) return toast(`${name} is already on this bill`);
-    const np = { id: uid(), name }; b.people.push(np); if (b.people.length === 1 && !b.payer) b.payer = np.id;
-    touch(b, true); if (!t.dataset.padd) $('#bNewPerson').focus(); return;
+    if (b.people.some(p => p.name.toLowerCase() === name.toLowerCase())) return toast(`${name} is already on this split`);
+    b.people.push({ id: uid(), name }); touch(b, true); if (!t.dataset.padd) $('#bNewPerson').focus(); return;
   }
-  if (t.dataset.prm) { b.people = b.people.filter(p => p.id !== t.dataset.prm); b.items.forEach(i => { i.who = (i.who || []).filter(id => id !== t.dataset.prm); }); if (b.payer === t.dataset.prm) b.payer = ''; return touch(b, true); }
-  if (t.dataset.tag) { const it = b.items.find(i => i.id === t.dataset.tag); const w = new Set(it.who || []); w.has(t.dataset.pid) ? w.delete(t.dataset.pid) : w.add(t.dataset.pid); it.who = [...w]; return touch(b, true); }
-  if (t.dataset.all) { const it = b.items.find(i => i.id === t.dataset.all); const all = b.people.every(p => (it.who || []).includes(p.id)); it.who = all ? [] : b.people.map(p => p.id); return touch(b, true); }
-  if (t.dataset.irm) { b.items = b.items.filter(i => i.id !== t.dataset.irm); return touch(b, true); }
-  if (t.id === 'bAddItem') { b.items.push({ id: uid(), qty: 1, name: '', price: 0, who: [] }); touch(b, true); const rows = document.querySelectorAll('#bills .item [data-f="name"]'); if (rows.length) rows[rows.length - 1].focus(); return; }
+  if (t.dataset.prm) { b.people = b.people.filter(p => p.id !== t.dataset.prm); b.receipts.forEach(r => { r.items.forEach(i => { i.who = (i.who || []).filter(id => id !== t.dataset.prm); }); if (r.payer === t.dataset.prm) r.payer = ''; }); return touch(b, true); }
+  if (t.dataset.tag) { const { it } = findItem(b, t.dataset.tag); const w = new Set(it.who || []); w.has(t.dataset.pid) ? w.delete(t.dataset.pid) : w.add(t.dataset.pid); it.who = [...w]; return touch(b, true); }
+  if (t.dataset.all) { const { it } = findItem(b, t.dataset.all); const all = b.people.every(p => (it.who || []).includes(p.id)); it.who = all ? [] : b.people.map(p => p.id); return touch(b, true); }
+  if (t.dataset.irm) { b.receipts.forEach(r => { r.items = r.items.filter(i => i.id !== t.dataset.irm); }); return touch(b, true); }
+  if (t.dataset.iadd) { const r = b.receipts.find(x => x.id === t.dataset.iadd); r.items.push({ id: uid(), qty: 1, name: '', price: 0, who: [] }); touch(b, true); const ins = document.querySelectorAll(`[data-rc="${r.id}"] .item [data-f="name"]`); if (ins.length) ins[ins.length - 1].focus(); return; }
+  if (t.id === 'bAddReceipt') { b.receipts.push(newReceipt(b.receipts.length + 1)); touch(b, true); const ins = document.querySelectorAll('[data-rc] [data-rf="name"]'); ins[ins.length - 1].scrollIntoView({ block: 'center' }); return; }
+  if (t.dataset.rcrm) {
+    if (t.dataset.armed !== '1') { t.dataset.armed = '1'; t.classList.add('danger', 'armed'); t.textContent = 'Click again to remove'; return; }
+    b.receipts = b.receipts.filter(r => r.id !== t.dataset.rcrm); return touch(b, true);
+  }
+  if (t.id === 'bShareOn') {
+    t.disabled = true;
+    backend.shareReady().then(ok => {
+      if (!ok) { t.disabled = false; $('#bShare').insertAdjacentHTML('beforeend', '<p class="warn-line" style="padding:0">Sharing needs a one-time setup in Supabase: open SQL Editor, paste the contents of bill-sharing.sql and press Run. Then try again.</p>'); return; }
+      b.token = randToken(); touch(b, true);
+    });
+    return;
+  }
+  if (t.id === 'bUnshare') { delete b.token; touch(b, true); toast('The link no longer works'); return; }
+  if (t.id === 'bCopyLink') return navigator.clipboard.writeText(shareLink(b)).then(() => toast('Link copied'), () => { $('#bLink').select(); toast('Copying is blocked here. The link is selected, copy it manually'); });
   if (t.id === 'bCopy') return navigator.clipboard.writeText(billText(b)).then(() => toast('Summary copied. Paste it into your chat'), () => toast('Copying is blocked here. Try from the installed app or another browser'));
   if (t.id === 'bDelete') {
     if (!billArmed) { billArmed = true; t.classList.add('armed'); t.textContent = 'Click again to delete'; return; }
-    state.bills = state.bills.filter(x => x.id !== b.id); ui.bill = ''; saveUi(); commit(); toast('Bill deleted');
+    state.bills = state.bills.filter(x => x.id !== b.id); ui.bill = ''; saveUi(); commit(); toast('Deleted');
   }
 });
 $('#bills').addEventListener('input', e => {
   const b = curBill(); if (!b) return; const t = e.target, row = t.closest('[data-item]');
-  if (row) { const it = b.items.find(i => i.id === row.dataset.item); if (!it) return;
+  if (row) { const { it } = findItem(b, row.dataset.item); if (!it) return;
     if (t.dataset.f === 'name') it.name = t.value; else if (t.dataset.f === 'qty') it.qty = Math.max(1, parseInt(t.value, 10) || 1); else if (t.dataset.f === 'price') it.price = Math.abs(parseAmount(t.value)); renderBillSummary(); }
 });
 $('#bills').addEventListener('change', e => {
-  const b = curBill(); if (!b) return; const t = e.target;
+  const b = curBill(); if (!b) return; const t = e.target, rcEl = t.closest('[data-rc]'), r = rcEl && b.receipts.find(x => x.id === rcEl.dataset.rc);
   if (t.id === 'bTitle') { b.title = t.value.trim() || 'Bill'; return touch(b); }
   if (t.id === 'bDate') { b.date = t.value || b.date; return touch(b); }
-  if (t.id === 'bPayer') { b.payer = t.value; return touch(b); }
-  if (t.dataset.c) { b[t.dataset.c] = chargeValue(b, t.dataset.c, t.value); t.value = b[t.dataset.c] ? fmtPlain(b[t.dataset.c]) : ''; return touch(b); }
-  if (t.closest('[data-item]')) { if (t.dataset.f === 'price') { const it = b.items.find(i => i.id === t.closest('[data-item]').dataset.item); t.value = it.price ? fmtPlain(it.price) : ''; } return touch(b); }
-  if (t.id === 'bScan' && t.files[0]) scanBill(b, t.files[0]);
+  if (t.dataset.scan && t.files[0]) return scanBill(b, r, t.files[0]);
+  if (!r) return;
+  if (t.dataset.rf === 'name') { r.name = t.value.trim() || 'Bill'; return touch(b); }
+  if (t.dataset.rf === 'payer') { r.payer = t.value; return touch(b); }
+  if (t.dataset.c) { r[t.dataset.c] = chargeValue(r, t.dataset.c, t.value); t.value = r[t.dataset.c] ? fmtPlain(r[t.dataset.c]) : ''; return touch(b); }
+  if (t.closest('[data-item]')) { if (t.dataset.f === 'price') { const { it } = findItem(b, t.closest('[data-item]').dataset.item); t.value = it.price ? fmtPlain(it.price) : ''; } return touch(b); }
 });
 $('#bills').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'bNewPerson') { e.preventDefault(); $('#bAddPerson').click(); } });
+/* Changes arriving from a guest while you are typing wait until you leave the field. */
+$('#bills').addEventListener('focusout', () => { if (billFocusRender) setTimeout(() => { if (billFocusRender && !billTyping()) { billFocusRender = false; render(); } }, 0); });
+const billTyping = () => ui.view === 'bills' && document.activeElement && document.activeElement.closest('#bills') && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+
+/* Guest page: someone opened a share link (#bill=<token>). They see only that split, pick or add their name and
+   tag what they ordered. Everything goes through the shared_bill* functions; the board stays private. */
+const GKEY2 = 'workboard.guest.v1';
+async function startGuest(cfg, token) {
+  mode = 'guest';
+  document.querySelector('.shell').style.display = 'none';
+  const g = $('#guest'); g.hidden = false; document.title = 'Split bill';
+  const msg = t => { g.innerHTML = `<div class="panel"><div class="led-empty">${t}</div></div>`; };
+  if (!cfg || !window.supabase) return msg('You seem to be offline. Check your connection and reload.');
+  const sb = window.supabase.createClient(cfg.url, cfg.key, { auth: { persistSession: false, autoRefreshToken: false } });
+  let bill = null, saving = 0;
+  const mine = () => { try { return JSON.parse(localStorage.getItem(GKEY2) || '{}')[token] || ''; } catch (e) { return ''; } };
+  const setMine = id => { try { const m = JSON.parse(localStorage.getItem(GKEY2) || '{}'); if (id) m[token] = id; else delete m[token]; localStorage.setItem(GKEY2, JSON.stringify(m)); } catch (e) {} };
+  const take = data => { bill = data ? normBill(data) : null; if (bill) state.currency = bill.currency || 'IDR'; };
+  async function load() { const { data, error } = await sb.rpc('shared_bill', { p_token: token }); if (error) throw error; take(data); draw(); }
+  function draw() {
+    if (!bill) return msg('This link doesn\'t work anymore. Ask for a new one.');
+    const me = bill.people.find(p => p.id === mine()), cur = bill.currency;
+    const head = `<div><h1>${esc(bill.title)}</h1><p class="hint">${esc(fmtDay(bill.date))} · ${bill.people.length} people</p></div>`;
+    if (!me) {
+      g.innerHTML = head + `<section class="panel"><h3>Who are you?</h3><div class="bill-body">
+        <div class="ppl">${bill.people.map(p => `<button type="button" class="pchip add" data-me="${p.id}">${esc(p.name)}</button>`).join('') || '<span class="hint">No names yet. Add yours below.</span>'}</div>
+        <div class="ed-row"><input class="inp" id="gName" placeholder="My name isn't here" maxlength="40"><button type="button" class="btn small primary" id="gJoin">Add me</button></div></div></section>`;
+      return;
+    }
+    const st = billSettle(bill), x = st.per.find(r => r.p.id === me.id);
+    const pays = st.transfers.filter(t => t.from.id === me.id || t.to.id === me.id);
+    g.innerHTML = head + `<p class="hint">Tagging as <b>${esc(me.name)}</b> · <button type="button" class="link" id="gSwitch">not you?</button><br>Tap everything you ordered. Shared dishes are split between everyone who taps them.</p>` +
+      st.rc.map(({ r, c }) => { const payer = bill.people.find(p => p.id === r.payer);
+        return `<section class="panel"><h3>${esc(r.name)}<span class="hint" style="font-weight:400"> · ${fmtMoney(roundMoney(c.total, cur))}${payer ? ` · paid by ${esc(payer.name)}` : ''}</span></h3>
+          ${r.items.map(it => { const on = (it.who || []).includes(me.id), others = (it.who || []).filter(id => id !== me.id).map(id => bill.people.find(p => p.id === id)).filter(Boolean).map(p => p.name);
+            return `<button type="button" class="g-item" data-gi="${it.id}" aria-pressed="${on}"><span class="box">${on ? '✓' : ''}</span><span class="nm">${(it.qty || 1) > 1 ? it.qty + '× ' : ''}${esc(it.name || 'Item')}${others.length ? `<small>${on ? 'Shared with' : 'Tagged by'} ${esc(others.join(', '))}</small>` : ''}</span><span class="v">${fmtMoney(it.price || 0)}</span></button>`; }).join('') || '<p class="hint" style="padding:0 14px 12px">No items yet.</p>'}
+          ${c.extra ? `<p class="hint" style="padding:8px 14px 12px;border-top:1px solid var(--line)">Service, tax and discount (${fmtMoney(roundMoney(c.extra, cur), true)}) are shared by what each person ordered.</p>` : ''}</section>`; }).join('') +
+      `<div class="g-me"><div class="g-tot"><span>Your share</span><b>${fmtMoney(roundMoney(x.total, cur))}</b></div>
+        ${pays.map(t => `<div class="hint">${t.from.id === me.id ? `You pay <b>${esc(t.to.name)}</b> ${fmtMoney(t.amount)}` : `<b>${esc(t.from.name)}</b> pays you ${fmtMoney(t.amount)}`}</div>`).join('')}
+        ${st.untagged.length ? `<div class="hint">${st.untagged.length} item${st.untagged.length === 1 ? ' is' : 's are'} still untagged, so shares can still change.</div>` : ''}
+        <div class="hint">${saving ? 'Saving…' : 'Saved'}</div></div>`;
+  }
+  g.addEventListener('click', async e => {
+    const t = e.target.closest('button'); if (!t || !bill) return;
+    if (t.dataset.me) { setMine(t.dataset.me); return draw(); }
+    if (t.id === 'gSwitch') { setMine(''); return draw(); }
+    if (t.id === 'gJoin') {
+      const name = $('#gName').value.trim(); if (!name) return $('#gName').focus();
+      t.disabled = true;
+      const { data, error } = await sb.rpc('shared_bill_join', { p_token: token, p_name: name });
+      if (error || !data) { t.disabled = false; return toast('Could not add your name. Try again'); }
+      setMine(data.id); return load().catch(() => toast('Could not load the bill. Check your connection'));
+    }
+    if (t.dataset.gi) {
+      const me = mine(), it = bill.receipts.flatMap(r => r.items).find(i => i.id === t.dataset.gi); if (!it) return;
+      const w = new Set(it.who || []); w.has(me) ? w.delete(me) : w.add(me); it.who = [...w];
+      const ids = bill.receipts.flatMap(r => r.items).filter(i => (i.who || []).includes(me)).map(i => i.id);
+      saving++; draw();
+      const { data, error } = await sb.rpc('shared_bill_tag', { p_token: token, p_person: me, p_items: ids });
+      saving--; if (error || !data) { toast('That didn\'t save. Check your connection'); return load().catch(() => {}); }
+      if (!saving) { take(data); draw(); }
+    }
+  });
+  g.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'gName') $('#gJoin').click(); });
+  const refresh = () => { if (!document.hidden && !saving) load().catch(() => {}); };
+  document.addEventListener('visibilitychange', refresh); setInterval(refresh, 15000);
+  msg('Loading the bill…');
+  try { await load(); } catch (e) { console.error(e); msg('Could not load this bill. Check your connection and reload.'); }
+}
 
 /* Reading the receipt: Tesseract.js (free, runs in the browser) is loaded the first time a photo is uploaded. */
 let ocrLib = null;
@@ -1202,20 +1365,21 @@ function loadOcr() {
   if (!ocrLib) ocrLib = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; sc.onload = () => res(window.Tesseract); sc.onerror = () => { ocrLib = null; rej(new Error('load')); }; document.head.appendChild(sc); });
   return ocrLib;
 }
-function setScan(t) { scanState = t; const el = $('#bScanState'); if (el) el.textContent = t; }
-async function scanBill(b, file) {
-  setScan('Getting the reader ready…');
+function setScan(rid, t) { scanState[rid] = t; const el = document.querySelector(`[data-scanstate="${rid}"]`); if (el) el.textContent = t; }
+async function scanBill(b, r, file) {
+  const setScanR = t => setScan(r.id, t);
+  setScanR('Getting the reader ready…');
   try {
     const T = await loadOcr();
-    const r = await T.recognize(file, 'eng', { logger: m => { if (m.status === 'recognizing text') setScan(`Reading the bill… ${Math.round(m.progress * 100)}%`); } });
+    const r = await T.recognize(file, 'eng', { logger: m => { if (m.status === 'recognizing text') setScanR(`Reading the bill… ${Math.round(m.progress * 100)}%`); } });
     const found = parseReceipt(r.data.text);
-    if (!found.items.length) { setScan('No items found. Try a sharper, straight-on photo, or type the items in.'); return; }
-    found.items.forEach(it => b.items.push({ id: uid(), qty: it.qty, name: it.name, price: it.price, who: [] }));
-    ['service', 'tax', 'discount'].forEach(k => { if (found[k]) b[k] = found[k]; });
-    if (found.total) b.scannedTotal = found.total;
-    scanState = `Found ${found.items.length} items. Check them, then tag who ordered each one.`;
+    if (!found.items.length) { setScanR('No items found. Try a sharper, straight-on photo, or type the items in.'); return; }
+    found.items.forEach(it => r.items.push({ id: uid(), qty: it.qty, name: it.name, price: it.price, who: [] }));
+    ['service', 'tax', 'discount'].forEach(k => { if (found[k]) r[k] = found[k]; });
+    if (found.total) r.scannedTotal = found.total;
+    scanState[r.id] = `Found ${found.items.length} items. Check them, then tag who ordered each one.`;
     touch(b, true);
-  } catch (e) { console.error(e); setScan('Could not read the photo here. Check your connection, or type the items in.'); }
+  } catch (e) { console.error(e); setScanR('Could not read the photo here. Check your connection, or type the items in.'); }
 }
 function parseReceipt(text) {
   const out = { items: [], service: 0, tax: 0, discount: 0, total: 0 }, zero = (CUR_DIGITS[state.currency || 'IDR'] ?? 2) === 0;
