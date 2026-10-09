@@ -1,0 +1,638 @@
+<title>Juan's Work Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a fixed header and summary strip over a horizontally scrolling row of job-ticket columns; one column per screen on phones. */
+:root {
+  --bg: #E7EBE6; --col: #DCE1DB; --surface: #FBFCFA; --ink: #17201C; --muted: #58655F;
+  --line: #C6CEC7; --accent: #2356A3; --accent-ink: #FFFFFF; --accent-soft: #DCE6F5;
+  --danger: #B3261E; --danger-soft: #F7DEDB; --warn: #9A5B00; --warn-soft: #F6E7CC;
+  --ok: #2B744A; --ok-soft: #D9EEDF; --shadow: 0 1px 0 rgba(23,32,28,.08), 0 1px 3px rgba(23,32,28,.06);
+  --p-low: #9AAAA2; --p-normal: #5F7FB0; --p-high: #C27A12; --p-urgent: #C2362C;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Roboto, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #111614; --col: #171E1B; --surface: #1F2724; --ink: #E4EBE7; --muted: #95A39C;
+  --line: #2E3934; --accent: #82A9EA; --accent-ink: #0D1A2F; --accent-soft: #1D2B42;
+  --danger: #F28B82; --danger-soft: #3A1F1D; --warn: #E3A54A; --warn-soft: #3A2C15;
+  --ok: #73C896; --ok-soft: #173025; --shadow: 0 1px 0 rgba(0,0,0,.35);
+  --p-low: #5E6E67; --p-normal: #6F91C7; --p-high: #D99335; --p-urgent: #E5675D;
+  color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #111614; --col: #171E1B; --surface: #1F2724; --ink: #E4EBE7; --muted: #95A39C;
+  --line: #2E3934; --accent: #82A9EA; --accent-ink: #0D1A2F; --accent-soft: #1D2B42;
+  --danger: #F28B82; --danger-soft: #3A1F1D; --warn: #E3A54A; --warn-soft: #3A2C15;
+  --ok: #73C896; --ok-soft: #173025; --shadow: 0 1px 0 rgba(0,0,0,.35);
+  --p-low: #5E6E67; --p-normal: #6F91C7; --p-high: #D99335; --p-urgent: #E5675D;
+  color-scheme: dark; }
+
+html, body { height: 100%; }
+body { background: var(--bg); color: var(--ink); font: 14px/1.45 var(--body); display: flex; flex-direction: column; overflow: hidden; }
+* { box-sizing: border-box; }
+button, input, select, textarea { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; padding: 14px 16px 10px; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; flex: 1 1 220px; }
+.brand h1 { font: 700 22px/1.1 var(--display); margin: 0; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brand .sub { font: 12px var(--mono); color: var(--muted); white-space: nowrap; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.search { position: relative; }
+.search input { width: 200px; max-width: 46vw; padding: 7px 10px 7px 30px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.search svg { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+select.f { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); max-width: 40vw; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.danger { color: var(--danger); }
+.btn.danger.armed { background: var(--danger); color: var(--surface); border-color: var(--danger); }
+.btn.ghost { border-color: transparent; background: transparent; }
+.icon-btn { padding: 7px 9px; }
+
+.strip { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; font-size: 12.5px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.chip b { font-weight: 600; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip.overdue b { color: var(--danger); }
+.chip.soon b { color: var(--warn); }
+.chip[aria-pressed="true"] b { color: inherit; }
+.chip.static { cursor: default; }
+
+.notice { margin: 0 16px 12px; padding: 8px 12px; border-radius: 6px; background: var(--accent-soft); display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; font-size: 13px; }
+.notice p { margin: 0; flex: 1 1 260px; }
+.link { background: none; border: 0; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font-weight: 500; }
+
+.board { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 0 16px 16px; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x proximity; scroll-padding-inline: 16px; }
+.col { flex: 0 0 290px; display: flex; flex-direction: column; min-height: 0; background: var(--col); border-radius: 8px; scroll-snap-align: start; }
+@media (max-width: 640px) { .col { flex-basis: calc(100vw - 48px); } .board { scroll-snap-type: x mandatory; } }
+.col-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 8px; }
+.col-head h2 { font: 600 15px/1.2 var(--display); margin: 0; letter-spacing: .01em; }
+.col-head .count { font: 12px var(--mono); color: var(--muted); }
+.col-head .count.over { color: var(--danger); font-weight: 500; }
+.col-head .add { margin-left: auto; padding: 2px 8px; font-size: 18px; line-height: 1; }
+.list { flex: 1; min-height: 40px; overflow-y: auto; padding: 2px 8px 10px; display: flex; flex-direction: column; gap: 8px; }
+.empty { color: var(--muted); font-size: 12.5px; text-align: center; padding: 18px 8px; border: 1px dashed var(--line); border-radius: 6px; }
+
+.card { position: relative; background: var(--surface); border-radius: 6px; box-shadow: var(--shadow); padding: 9px 10px 9px 14px; cursor: pointer; user-select: none; -webkit-user-select: none; }
+.card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; border-radius: 6px 0 0 6px; background: var(--p-normal); }
+.card.p-low::before { background: var(--p-low); } .card.p-high::before { background: var(--p-high); } .card.p-urgent::before { background: var(--p-urgent); }
+.card:hover { outline: 1px solid var(--line); }
+.card.done h3 { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--line); }
+.card.dragging { opacity: .3; }
+.card-top { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+.tkt { font: 500 11.5px var(--mono); color: var(--muted); letter-spacing: .02em; }
+.ex { font: 600 10px var(--body); text-transform: uppercase; letter-spacing: .08em; color: var(--accent); }
+.grip { margin-left: auto; border: 0; background: none; color: var(--muted); cursor: grab; padding: 2px 4px; touch-action: none; border-radius: 4px; }
+.grip:hover { background: var(--col); }
+.card h3 { margin: 0; font: 500 14px/1.35 var(--body); overflow-wrap: anywhere; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; font-size: 12px; color: var(--muted); }
+.meta:empty { display: none; }
+.due { font: 500 11.5px var(--mono); padding: 1px 6px; border-radius: 4px; background: var(--col); color: var(--muted); }
+.due.overdue { background: var(--danger-soft); color: var(--danger); }
+.due.soon { background: var(--warn-soft); color: var(--warn); }
+.due.ok { background: var(--ok-soft); color: var(--ok); }
+.tag { padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); font-size: 11.5px; }
+.ck { font: 11.5px var(--mono); }
+.ck.full { color: var(--ok); }
+.av { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 600 10px var(--body); color: #fff; flex: none; }
+.placeholder { border: 2px dashed var(--accent); border-radius: 6px; background: var(--accent-soft); }
+.drag-ghost { position: fixed; z-index: 50; pointer-events: none; transform: rotate(2deg); box-shadow: 0 10px 24px rgba(0,0,0,.22); margin: 0; }
+
+dialog { border: 0; border-radius: 10px; padding: 0; width: min(560px, calc(100vw - 24px)); max-height: calc(100% - 24px); background: var(--surface); color: var(--ink); box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+dialog::backdrop { background: rgba(10,15,13,.45); }
+.dlg { display: flex; flex-direction: column; max-height: calc(100vh - 24px); }
+.dlg-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px 10px; border-bottom: 1px solid var(--line); }
+.dlg-head h2 { margin: 0; font: 700 18px var(--display); }
+.dlg-head .tkt { font-size: 13px; }
+.dlg-head .x { margin-left: auto; }
+.dlg-body { padding: 14px 18px; overflow-y: auto; display: grid; gap: 14px; }
+.dlg-foot { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); }
+.dlg-foot .sp { flex: 1; }
+.field { display: grid; gap: 5px; min-width: 0; }
+.field > span, .lbl { font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.field input, .field select, .field textarea, .inp { width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.field textarea { min-height: 84px; resize: vertical; }
+.row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.checklist { display: grid; gap: 4px; }
+.ci { display: flex; align-items: center; gap: 8px; }
+.ci input[type=text] { flex: 1; min-width: 0; padding: 5px 8px; border: 1px solid transparent; border-radius: 4px; background: transparent; }
+.ci input[type=text]:hover, .ci input[type=text]:focus { border-color: var(--line); background: var(--bg); }
+.ci.done input[type=text] { text-decoration: line-through; color: var(--muted); }
+.ci .rm { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 6px; }
+.stamp { font: 12px var(--mono); color: var(--muted); }
+
+.sect { display: grid; gap: 8px; }
+.sect h3 { margin: 0; font: 600 15px var(--display); }
+.sect p { margin: 0; color: var(--muted); font-size: 13px; max-width: 62ch; }
+.ed-row { display: flex; gap: 6px; align-items: center; }
+.ed-row .inp { flex: 1; min-width: 0; padding: 6px 9px; }
+.ed-row input[type=color] { width: 34px; height: 32px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); flex: none; }
+.ed-row .small { padding: 5px 8px; font-size: 12.5px; }
+.ed-row label.chk { display: flex; gap: 4px; align-items: center; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+textarea.inp { min-height: 90px; font: 12px var(--mono); }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 6px; font-size: 13px; z-index: 60; max-width: calc(100vw - 32px); }
+@media (max-width: 520px) { .search input { width: 100%; max-width: none; } .search { flex: 1 1 100%; } .tools { flex: 1 1 100%; flex-wrap: nowrap; } .tools { flex-wrap: wrap; } select.f { flex: 1 1 0; min-width: 0; max-width: none; } }
+</style>
+
+<header class="top">
+  <div class="brand"><h1 id="boardName">Work Board</h1><span class="sub" id="boardSub"></span></div>
+  <div class="tools">
+    <label class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search cards" aria-label="Search cards"></label>
+    <select id="fPerson" class="f" aria-label="Filter by person"></select>
+    <select id="fPriority" class="f" aria-label="Filter by priority">
+      <option value="">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option>
+    </select>
+    <button class="btn primary" id="newCard" title="New card (N)">+ New card</button>
+    <button class="btn icon-btn" id="openSettings" aria-label="Board settings" title="Board settings">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--surface)"/><circle cx="15" cy="12" r="2" fill="var(--surface)"/><circle cx="7" cy="18" r="2" fill="var(--surface)"/></svg>
+    </button>
+  </div>
+</header>
+<div class="strip" id="strip"></div>
+<div class="notice" id="exampleNotice" hidden>
+  <p>The cards marked <b>Example</b> show what the board can do. Add your own work, then clear them.</p>
+  <button class="link" id="clearExamples">Remove example cards</button>
+</div>
+<div class="notice" id="importNotice" hidden>
+  <p><span id="importText"></span> Move them to your online board so they show on all your devices.</p>
+  <button class="btn small primary" id="doImport">Move my cards</button><button class="link" id="skipImport">Not now</button>
+</div>
+<main class="board" id="board" aria-label="Board columns"></main>
+
+<dialog id="cardDlg">
+  <form class="dlg" id="cardForm" method="dialog">
+    <div class="dlg-head"><span class="tkt" id="cTkt"></span><h2 id="cHead">New card</h2><button type="button" class="btn ghost x" id="cClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <label class="field"><span>Title</span><input id="cTitle" required maxlength="200" placeholder="What needs to happen?"></label>
+      <div class="row">
+        <label class="field"><span>Column</span><select id="cCol"></select></label>
+        <label class="field"><span>Owner</span><select id="cOwner"></select></label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Priority</span><select id="cPriority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
+        <label class="field"><span>Due date</span><input id="cDue" type="date"></label>
+      </div>
+      <label class="field"><span>Tags</span><input id="cTags" placeholder="Comma separated, e.g. client, finance"></label>
+      <label class="field"><span>Notes</span><textarea id="cNotes" placeholder="Details, links, decisions"></textarea></label>
+      <div class="field"><span>Checklist</span>
+        <div class="checklist" id="cChecklist"></div>
+        <input class="inp" id="cNewItem" placeholder="Add a step and press Enter">
+      </div>
+      <div class="stamp" id="cStamp"></div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger" id="cDelete">Delete</button>
+      <span class="sp"></span>
+      <button type="button" class="btn" id="cCancel">Cancel</button>
+      <button type="submit" class="btn primary" id="cSave">Save card</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="setDlg">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Board settings</h2><button type="button" class="btn ghost x" id="sClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <div class="sect"><h3>Board name</h3><div class="ed-row"><input class="inp" id="sName" maxlength="60"></div></div>
+      <div class="sect"><h3>People</h3><p>Owners you can assign cards to. Add teammates now so their cards carry over when the board becomes shared.</p>
+        <div id="sPeople" class="sect"></div>
+        <div class="ed-row"><input class="inp" id="sNewPerson" placeholder="Name"><button class="btn small" id="sAddPerson">Add person</button></div>
+      </div>
+      <div class="sect"><h3>Columns</h3><p>Set a limit to flag a column when it holds too many cards. Cards moved into a finish column get a completed date.</p>
+        <div id="sCols" class="sect"></div>
+        <div class="ed-row"><input class="inp" id="sNewCol" placeholder="Column name"><button class="btn small" id="sAddCol">Add column</button></div>
+      </div>
+      <div class="sect"><h3>Backup and move devices</h3><p id="sBackupNote"></p>
+        <div class="ed-row" style="flex-wrap:wrap"><button class="btn small" id="sCopy">Copy backup</button><button class="btn small" id="sSaveFile" hidden>Save backup file</button><label class="btn small">Open backup file<input type="file" id="sFile" accept=".json,application/json" hidden></label></div>
+        <textarea class="inp" id="sPaste" placeholder="Paste a backup here to replace this board"></textarea>
+        <div class="ed-row"><button class="btn small" id="sRestore">Restore from pasted backup</button></div>
+      </div>
+      <div class="sect"><h3>Start over</h3><p>Erases every card, person and column.</p>
+        <div class="ed-row"><button class="btn small danger" id="sReset">Erase board</button></div>
+      </div>
+    </div>
+  </div>
+</dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+const KEY = 'workboard.v1', UIKEY = 'workboard.ui.v1';
+const $ = s => document.querySelector(s);
+const uid = () => Math.random().toString(36).slice(2, 10);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const pad = n => String(n).padStart(2, '0');
+const isoDay = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const addDays = n => { const d = new Date(); d.setDate(d.getDate() + n); return isoDay(d); };
+const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const fmtDay = s => { const [y, m, d] = s.split('-').map(Number); return `${MONTHS[m - 1]} ${d}` + (y !== new Date().getFullYear() ? ` ${y}` : ''); };
+const PRI = ['urgent', 'high', 'normal', 'low'];
+const COLORS = ['#2356A3', '#B5512A', '#2B744A', '#7A4BA8', '#A33A62', '#1F7A86', '#806A12'];
+
+function seed() {
+  const me = { id: uid(), name: 'Juan', color: COLORS[0] };
+  const cols = [
+    { id: uid(), name: 'Backlog' }, { id: uid(), name: 'To do', limit: 0 },
+    { id: uid(), name: 'In progress', limit: 3 }, { id: uid(), name: 'Waiting on others' },
+    { id: uid(), name: 'Done', done: true }
+  ];
+  const now = Date.now();
+  const c = (col, title, extra = {}) => ({ id: uid(), num: 0, title, notes: '', columnId: cols[col].id, owner: me.id, priority: 'normal', due: '', tags: [], checklist: [], example: true, createdAt: now, updatedAt: now, ...extra });
+  const cards = [
+    c(1, 'Add your real tasks to the board', { priority: 'high', due: addDays(0), tags: ['setup'], notes: 'Use + New card, or press N on a keyboard.' }),
+    c(2, 'Decide who else should use the tracker', { due: addDays(3), tags: ['setup'], checklist: [{ text: 'List the people', done: true }, { text: 'Add them under Board settings', done: false }] }),
+    c(2, 'Send weekly status update', { priority: 'urgent', due: addDays(-1), tags: ['weekly'] }),
+    c(0, 'Pick hosting for the shared version', { priority: 'low', tags: ['setup'], notes: 'Needed before teammates can see the same board.' }),
+    c(3, 'Get quote approved by finance', { due: addDays(6), tags: ['finance'], owner: '' }),
+    c(4, 'Set up the work board', { doneAt: now, tags: ['setup'] })
+  ];
+  cards.forEach((x, i) => { x.num = i + 1; x.order = i; });
+  return { version: 1, name: "Juan's Work Board", people: [me], columns: cols, cards, nextNum: cards.length + 1 };
+}
+function loadLocal() { try { const s = localStorage.getItem(KEY); if (s) { const d = JSON.parse(s); if (valid(d)) return d; } } catch (e) {} return null; }
+function load() { return loadLocal() || seed(); }
+function blankBoard() {
+  return { version: 1, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], nextNum: 1, cards: [],
+    columns: [{ id: uid(), name: 'Backlog' }, { id: uid(), name: 'To do' }, { id: uid(), name: 'In progress', limit: 3 }, { id: uid(), name: 'Waiting on others' }, { id: uid(), name: 'Done', done: true }] };
+}
+function valid(d) { return d && Array.isArray(d.columns) && Array.isArray(d.cards) && Array.isArray(d.people) && d.columns.length; }
+function save() { if (mode === 'local') try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+let mode = 'loading'; // loading | cloud | local
+let state = blankBoard();
+let ui = { q: '', person: '', priority: '', due: '' };
+try { Object.assign(ui, JSON.parse(localStorage.getItem(UIKEY) || '{}'), { q: '' }); } catch (e) {}
+const saveUi = () => { try { localStorage.setItem(UIKEY, JSON.stringify(ui)); } catch (e) {} };
+
+const person = id => state.people.find(p => p.id === id);
+const column = id => state.columns.find(c => c.id === id);
+const doneIds = () => new Set(state.columns.filter(c => c.done).map(c => c.id));
+const initials = n => n.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+function dueState(card) {
+  if (!card.due || doneIds().has(card.columnId)) return card.due ? '' : null;
+  const t = isoDay(new Date()), w = addDays(7);
+  if (card.due < t) return 'overdue';
+  if (card.due <= addDays(2)) return 'soon';
+  return card.due <= w ? 'week' : 'later';
+}
+function matches(card) {
+  if (ui.person === '_none' ? card.owner : (ui.person && card.owner !== ui.person)) return false;
+  if (ui.priority && card.priority !== ui.priority) return false;
+  if (ui.due) { const s = dueState(card); if (ui.due === 'overdue' && s !== 'overdue') return false; if (ui.due === 'week' && !['overdue', 'soon', 'week'].includes(s)) return false; }
+  if (ui.q) {
+    const q = ui.q.toLowerCase(), p = person(card.owner);
+    const hay = [card.title, card.notes, card.tags.join(' '), p?.name, 'T-' + card.num, ...card.checklist.map(i => i.text)].join(' ').toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+const sorted = colId => state.cards.filter(c => c.columnId === colId).sort((a, b) => a.order - b.order);
+
+function render() { renderTop(); renderStrip(); renderBoard(); }
+function renderSub() {
+  const open = state.cards.filter(c => !doneIds().has(c.columnId)).length;
+  const sync = mode === 'loading' ? 'Connecting…' : mode === 'local' ? 'Saved on this device' : writing ? 'Saving…' : 'Synced online';
+  $('#boardSub').textContent = `${open} open · ${sync}`;
+}
+function renderTop() {
+  $('#boardName').textContent = state.name;
+  document.title = state.name;
+  renderSub();
+  const fp = $('#fPerson');
+  fp.innerHTML = `<option value="">Everyone</option>` + state.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('') + `<option value="_none">Unassigned</option>`;
+  if (ui.person && ui.person !== '_none' && !person(ui.person)) ui.person = '';
+  fp.value = ui.person; $('#fPriority').value = ui.priority;
+  $('#exampleNotice').hidden = !state.cards.some(c => c.example);
+}
+function renderStrip() {
+  const open = state.cards.filter(c => !doneIds().has(c.columnId));
+  const overdue = open.filter(c => dueState(c) === 'overdue').length;
+  const week = open.filter(c => ['overdue', 'soon', 'week'].includes(dueState(c))).length;
+  const urgent = open.filter(c => c.priority === 'urgent').length;
+  const doneWeek = state.cards.filter(c => doneIds().has(c.columnId) && c.doneAt && Date.now() - c.doneAt < 7 * 864e5).length;
+  $('#strip').innerHTML =
+    `<button class="chip overdue" data-due="overdue" aria-pressed="${ui.due === 'overdue'}"><b>${overdue}</b> overdue</button>` +
+    `<button class="chip soon" data-due="week" aria-pressed="${ui.due === 'week'}"><b>${week}</b> due in 7 days</button>` +
+    `<button class="chip" data-pri="urgent" aria-pressed="${ui.priority === 'urgent'}"><b>${urgent}</b> urgent</button>` +
+    `<span class="chip static"><b>${doneWeek}</b> finished this week</span>` +
+    ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '');
+}
+function cardHtml(c) {
+  const p = person(c.owner), ds = dueState(c), done = doneIds().has(c.columnId);
+  const ck = c.checklist.length ? `<span class="ck ${c.checklist.every(i => i.done) ? 'full' : ''}">☑ ${c.checklist.filter(i => i.done).length}/${c.checklist.length}</span>` : '';
+  const due = c.due ? `<span class="due ${ds === 'overdue' ? 'overdue' : ds === 'soon' ? 'soon' : ''}" title="Due date">${ds === 'overdue' ? 'Overdue · ' : ''}${fmtDay(c.due)}</span>` : '';
+  const tags = c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('');
+  const av = p ? `<span class="av" style="background:${esc(p.color)}" title="${esc(p.name)}">${esc(initials(p.name))}</span>` : '';
+  return `<article class="card p-${c.priority}${done ? ' done' : ''}" data-id="${c.id}" tabindex="0" aria-label="${esc(c.title)}">
+    <div class="card-top"><span class="tkt">T-${String(c.num).padStart(3, '0')}</span>${c.example ? '<span class="ex">Example</span>' : ''}
+    <button class="grip" type="button" aria-label="Drag to move" title="Drag to move">⠿</button></div>
+    <h3>${esc(c.title)}</h3><div class="meta">${due}${tags}${ck}${av}</div></article>`;
+}
+function renderBoard() {
+  const b = $('#board'), sx = b.scrollLeft;
+  const scrolls = {}; b.querySelectorAll('.list').forEach(l => scrolls[l.dataset.col] = l.scrollTop);
+  b.innerHTML = state.columns.map(col => {
+    const all = sorted(col.id), vis = all.filter(matches);
+    const over = col.limit && all.length > col.limit;
+    const count = (vis.length !== all.length ? `${vis.length} of ${all.length}` : `${all.length}`) + (col.limit ? ` / ${col.limit}` : '');
+    return `<section class="col" data-col="${col.id}"><div class="col-head"><h2>${esc(col.name)}</h2><span class="count ${over ? 'over' : ''}" title="${col.limit ? 'Cards / limit' : 'Cards'}">${count}</span>
+      <button class="btn ghost add" data-add="${col.id}" aria-label="Add card to ${esc(col.name)}">+</button></div>
+      <div class="list" data-col="${col.id}">${vis.map(cardHtml).join('') || `<div class="empty">${all.length ? 'No cards match the filters' : 'Drop cards here'}</div>`}</div></section>`;
+  }).join('');
+  b.scrollLeft = sx; b.querySelectorAll('.list').forEach(l => { if (scrolls[l.dataset.col]) l.scrollTop = scrolls[l.dataset.col]; });
+}
+function commit() { if (mode === 'local') save(); else if (mode === 'cloud') pushCloud(); render(); }
+
+/* ---- online sync: one doc for board settings, one doc per card ---- */
+const IMPKEY = 'workboard.imported.v1';
+const clone = o => JSON.parse(JSON.stringify(o));
+const metaOf = d => ({ version: d.version || 1, name: d.name || 'Work Board', people: d.people || [], columns: d.columns || [], nextNum: d.nextNum || 1 });
+let metaRef = null, cardsCol = null, writing = 0, pendingRender = false;
+const synced = { meta: null, cards: new Map() }, chains = new Map();
+function enqueue(key, fn) {
+  writing++; renderSub();
+  const p = (chains.get(key) || Promise.resolve()).then(fn).catch(writeFail);
+  chains.set(key, p);
+  p.finally(() => { writing--; if (chains.get(key) === p) chains.delete(key); renderSub(); });
+}
+function pushCloud() {
+  const m = JSON.stringify(metaOf(state));
+  if (m !== synced.meta) { synced.meta = m; const body = JSON.parse(m); enqueue('meta', () => metaRef.set(body)); }
+  const ids = new Set();
+  for (const c of state.cards) {
+    ids.add(c.id); const j = JSON.stringify(c);
+    if (synced.cards.get(c.id) !== j) { synced.cards.set(c.id, j); const body = JSON.parse(j); enqueue(c.id, () => cardsCol.doc(c.id).set(body)); }
+  }
+  for (const id of [...synced.cards.keys()]) if (!ids.has(id)) { synced.cards.delete(id); enqueue(id, () => cardsCol.doc(id).delete()); }
+}
+function writeFail(e) {
+  const code = e && e.code;
+  if (code === 'not_granted') toast('You can view this board but not change it');
+  else if (code === 'quota_exceeded') toast('The online board is full. Delete old cards to add new ones');
+  else toast('A change did not save. Check your connection and reload the page');
+}
+function scheduleRender() { if (drag && drag.active) { pendingRender = true; return; } render(); }
+function goLocal(msg) { mode = 'local'; state = load(); render(); if (msg) toast(msg); }
+function dbFail() { if (mode === 'loading') goLocal('Could not reach the online board. Using this device only'); else toast('Lost the connection to the online board. Reload to reconnect'); }
+async function start() {
+  render();
+  const c = window.claude;
+  if (!c || typeof c.use !== 'function') return goLocal();
+  let db = null; try { db = await c.use('db'); } catch (e) {}
+  if (!db) return goLocal();
+  metaRef = db.doc('board/meta'); cardsCol = db.collection('cards');
+  let gotMeta = false, gotCards = false;
+  const ready = () => { if (gotMeta && gotCards && mode === 'loading') { mode = 'cloud'; checkImport(); } scheduleRender(); };
+  metaRef.onSnapshot(s => {
+    if (s.exists) { const m = metaOf(clone(s.data())); synced.meta = JSON.stringify(m); if (m.columns.length) Object.assign(state, m); }
+    if (s.exists || !s.metadata.fromCache) gotMeta = true; ready();
+  }, dbFail);
+  cardsCol.onSnapshot(s => {
+    state.cards = s.docs.map(d => ({ ...clone(d.data()), id: d.id }));
+    synced.cards = new Map(state.cards.map(x => [x.id, JSON.stringify(x)]));
+    if (s.size || !s.metadata.fromCache) gotCards = true; ready();
+  }, dbFail);
+}
+function checkImport() {
+  const l = loadLocal(); let skipped = false; try { skipped = localStorage.getItem(IMPKEY) === '1'; } catch (e) {}
+  const n = l ? l.cards.filter(x => !x.example).length : 0;
+  $('#importNotice').hidden = !n || skipped;
+  if (n) $('#importText').textContent = `You have ${n} card${n > 1 ? 's' : ''} saved on this device from the earlier version.`;
+}
+function importLocal() {
+  const l = loadLocal(); if (!l) return;
+  const colMap = {}, pMap = {};
+  l.columns.forEach(c => {
+    let t = state.columns.find(x => x.name.toLowerCase() === c.name.toLowerCase());
+    if (!t) { t = { id: uid(), name: c.name }; if (c.done) t.done = true; if (c.limit) t.limit = c.limit; const d = state.columns.findIndex(x => x.done); if (c.done || d < 0) state.columns.push(t); else state.columns.splice(d, 0, t); }
+    colMap[c.id] = t.id;
+  });
+  l.people.forEach(p => { let t = state.people.find(x => x.name.toLowerCase() === p.name.toLowerCase()); if (!t) { t = { ...p, id: uid() }; state.people.push(t); } pMap[p.id] = t.id; });
+  const cards = l.cards.filter(c => !c.example).sort((a, b) => a.num - b.num);
+  cards.forEach(c => { const col = colMap[c.columnId] || state.columns[0].id; state.cards.push({ ...c, id: uid(), num: state.nextNum++, columnId: col, owner: pMap[c.owner] || '', order: nextOrder(col) }); });
+  try { localStorage.setItem(IMPKEY, '1'); } catch (e) {}
+  $('#importNotice').hidden = true; commit(); toast(`Moved ${cards.length} cards to your online board`);
+}
+let toastT;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 2400); }
+
+/* ---- filters ---- */
+$('#q').addEventListener('input', e => { ui.q = e.target.value.trim(); renderStrip(); renderBoard(); });
+$('#fPerson').addEventListener('change', e => { ui.person = e.target.value; saveUi(); renderStrip(); renderBoard(); });
+$('#fPriority').addEventListener('change', e => { ui.priority = e.target.value; saveUi(); renderStrip(); renderBoard(); });
+$('#strip').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.due) ui.due = ui.due === b.dataset.due ? '' : b.dataset.due;
+  if (b.dataset.pri) ui.priority = ui.priority === b.dataset.pri ? '' : b.dataset.pri;
+  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '' }; $('#q').value = ''; }
+  saveUi(); render();
+});
+$('#clearExamples').addEventListener('click', () => { const n = state.cards.filter(c => c.example).length; state.cards = state.cards.filter(c => !c.example); commit(); toast(`Removed ${n} example cards`); });
+
+/* ---- card editor ---- */
+const dlg = $('#cardDlg');
+let editing = null, draftList = [], delArmed = false;
+function openCard(id, colId) {
+  const c = id ? state.cards.find(x => x.id === id) : null;
+  editing = c ? c.id : null;
+  $('#cHead').textContent = c ? 'Edit card' : 'New card';
+  $('#cTkt').textContent = c ? `T-${String(c.num).padStart(3, '0')}` : '';
+  $('#cCol').innerHTML = state.columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
+  $('#cOwner').innerHTML = `<option value="">Unassigned</option>` + state.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+  $('#cTitle').value = c?.title || '';
+  $('#cCol').value = c?.columnId || colId || (state.columns[1] || state.columns[0]).id;
+  $('#cOwner').value = c ? (person(c.owner) ? c.owner : '') : (ui.person && ui.person !== '_none' ? ui.person : state.people[0]?.id || '');
+  $('#cPriority').value = c?.priority || 'normal';
+  $('#cDue').value = c?.due || '';
+  $('#cTags').value = c?.tags.join(', ') || '';
+  $('#cNotes').value = c?.notes || '';
+  draftList = (c?.checklist || []).map(i => ({ ...i }));
+  renderChecklist();
+  $('#cStamp').textContent = c ? `Created ${new Date(c.createdAt).toLocaleString()}` + (c.updatedAt !== c.createdAt ? ` · Updated ${new Date(c.updatedAt).toLocaleString()}` : '') + (c.doneAt && doneIds().has(c.columnId) ? ` · Finished ${new Date(c.doneAt).toLocaleDateString()}` : '') : '';
+  $('#cDelete').hidden = !c; disarm();
+  dlg.showModal();
+  if (!c) $('#cTitle').focus();
+}
+function renderChecklist() {
+  $('#cChecklist').innerHTML = draftList.map((it, i) => `<div class="ci ${it.done ? 'done' : ''}"><input type="checkbox" id="ck${i}" data-i="${i}" ${it.done ? 'checked' : ''} aria-label="Done"><input type="text" id="ckt${i}" data-i="${i}" value="${esc(it.text)}" aria-label="Step"><button type="button" class="rm" data-rm="${i}" aria-label="Remove step">✕</button></div>`).join('');
+}
+$('#cChecklist').addEventListener('change', e => { const i = e.target.dataset.i; if (i == null) return; if (e.target.type === 'checkbox') { draftList[i].done = e.target.checked; renderChecklist(); } });
+$('#cChecklist').addEventListener('input', e => { const i = e.target.dataset.i; if (i != null && e.target.type === 'text') draftList[i].text = e.target.value; });
+$('#cChecklist').addEventListener('click', e => { const r = e.target.dataset.rm; if (r != null) { draftList.splice(+r, 1); renderChecklist(); } });
+$('#cNewItem').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v) { draftList.push({ text: v, done: false }); e.target.value = ''; renderChecklist(); } } });
+$('#cardForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const title = $('#cTitle').value.trim(); if (!title) return;
+  const pending = $('#cNewItem').value.trim(); if (pending) { draftList.push({ text: pending, done: false }); $('#cNewItem').value = ''; }
+  const colId = $('#cCol').value, now = Date.now();
+  const data = { title, columnId: colId, owner: $('#cOwner').value, priority: $('#cPriority').value, due: $('#cDue').value,
+    tags: [...new Set($('#cTags').value.split(',').map(s => s.trim()).filter(Boolean))], notes: $('#cNotes').value.trim(),
+    checklist: draftList.filter(i => i.text.trim()), updatedAt: now };
+  if (editing) {
+    const c = state.cards.find(x => x.id === editing);
+    if (c.columnId !== colId) { data.order = nextOrder(colId); markDone(c, colId); }
+    Object.assign(c, data);
+    toast('Card saved');
+  } else {
+    const c = { id: uid(), num: state.nextNum++, createdAt: now, order: nextOrder(colId), ...data };
+    markDone(c, colId); state.cards.push(c);
+    toast(`Added T-${String(c.num).padStart(3, '0')}`);
+  }
+  dlg.close(); commit();
+});
+const nextOrder = colId => Math.max(-1, ...state.cards.filter(c => c.columnId === colId).map(c => c.order)) + 1;
+function markDone(c, colId) { if (column(colId)?.done) { if (!column(c.columnId)?.done || !c.doneAt) c.doneAt = Date.now(); } else delete c.doneAt; }
+function disarm() { delArmed = false; $('#cDelete').classList.remove('armed'); $('#cDelete').textContent = 'Delete'; }
+$('#cDelete').addEventListener('click', () => {
+  if (!delArmed) { delArmed = true; $('#cDelete').classList.add('armed'); $('#cDelete').textContent = 'Click again to delete'; return; }
+  state.cards = state.cards.filter(c => c.id !== editing); dlg.close(); commit(); toast('Card deleted');
+});
+$('#cCancel').addEventListener('click', () => dlg.close());
+$('#cClose').addEventListener('click', () => dlg.close());
+$('#newCard').addEventListener('click', () => openCard());
+document.addEventListener('keydown', e => {
+  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); openCard(); }
+  if (e.key === 'Enter' && document.activeElement.classList?.contains('card')) openCard(document.activeElement.dataset.id);
+  if (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
+});
+
+/* ---- board clicks + drag ---- */
+const board = $('#board');
+let drag = null, suppressClick = false;
+board.addEventListener('click', e => {
+  if (suppressClick) return;
+  const add = e.target.closest('[data-add]'); if (add) return openCard(null, add.dataset.add);
+  if (e.target.closest('.grip')) return;
+  const card = e.target.closest('.card'); if (card) openCard(card.dataset.id);
+});
+board.addEventListener('pointerdown', e => {
+  const card = e.target.closest('.card'); if (!card || e.button !== 0) return;
+  const onGrip = !!e.target.closest('.grip');
+  if (e.pointerType !== 'mouse' && !onGrip) return;
+  drag = { id: card.dataset.id, el: card, x0: e.clientX, y0: e.clientY, active: false, pid: e.pointerId };
+  if (onGrip) e.preventDefault();
+});
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  if (!drag.active) { if (Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) < 6) return; startDrag(e); }
+  e.preventDefault();
+  drag.ghost.style.left = (e.clientX - drag.dx) + 'px'; drag.ghost.style.top = (e.clientY - drag.dy) + 'px';
+  drag.lx = e.clientX; drag.ly = e.clientY; place(e.clientX, e.clientY);
+}, { passive: false });
+window.addEventListener('pointerup', e => { if (!drag || e.pointerId !== drag.pid) return; if (drag.active) { finishDrag(); suppressClick = true; setTimeout(() => suppressClick = false, 0); } drag = null; });
+window.addEventListener('pointercancel', () => { if (drag?.active) { cleanupDrag(); renderBoard(); } drag = null; });
+function startDrag(e) {
+  const r = drag.el.getBoundingClientRect();
+  drag.active = true; drag.dx = e.clientX - r.left; drag.dy = e.clientY - r.top;
+  const g = drag.el.cloneNode(true); g.classList.add('drag-ghost'); g.style.width = r.width + 'px'; document.body.appendChild(g); drag.ghost = g;
+  drag.ph = document.createElement('div'); drag.ph.className = 'placeholder'; drag.ph.style.height = r.height + 'px';
+  drag.el.after(drag.ph); drag.el.classList.add('dragging'); drag.el.style.display = 'none';
+  document.body.style.cursor = 'grabbing';
+  drag.timer = setInterval(autoScroll, 16);
+}
+function place(x, y) {
+  const el = document.elementFromPoint(x, y); const list = el?.closest('.list') || el?.closest('.col')?.querySelector('.list'); if (!list) return;
+  list.querySelector('.empty')?.remove();
+  const cards = [...list.querySelectorAll('.card:not(.dragging)')];
+  const before = cards.find(c => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2; });
+  if (before) { if (before.previousElementSibling !== drag.ph) list.insertBefore(drag.ph, before); } else if (list.lastElementChild !== drag.ph) list.appendChild(drag.ph);
+}
+function autoScroll() {
+  if (!drag?.active || drag.lx == null) return;
+  const br = board.getBoundingClientRect(), edge = 50;
+  if (drag.lx < br.left + edge) board.scrollLeft -= 12; else if (drag.lx > br.right - edge) board.scrollLeft += 12;
+  const list = drag.ph.parentElement; if (list) { const lr = list.getBoundingClientRect(); if (drag.ly < lr.top + 40) list.scrollTop -= 10; else if (drag.ly > lr.bottom - 40) list.scrollTop += 10; }
+}
+function cleanupDrag() { if (pendingRender) { pendingRender = false; setTimeout(render, 0); } clearInterval(drag.timer); drag.ghost?.remove(); document.body.style.cursor = ''; }
+function finishDrag() {
+  const list = drag.ph.parentElement, colId = list?.dataset.col; let next = drag.ph.nextElementSibling;
+  while (next && !next.classList.contains('card')) next = next.nextElementSibling;
+  cleanupDrag();
+  const c = state.cards.find(x => x.id === drag.id);
+  if (c && colId) {
+    const fromCol = c.columnId;
+    const arr = sorted(colId).filter(x => x.id !== c.id);
+    const idx = next ? arr.findIndex(x => x.id === next.dataset.id) : -1;
+    arr.splice(idx < 0 ? arr.length : idx, 0, c);
+    markDone(c, colId); c.columnId = colId; arr.forEach((x, i) => x.order = i);
+    if (fromCol !== colId) { c.updatedAt = Date.now(); toast(`Moved to ${column(colId).name}`); }
+  }
+  commit();
+}
+
+/* ---- settings ---- */
+const sd = $('#setDlg');
+$('#openSettings').addEventListener('click', () => { renderSettings(); sd.showModal(); });
+$('#sClose').addEventListener('click', () => sd.close());
+sd.addEventListener('close', () => { resetArmed = false; $('#sReset').classList.remove('armed'); $('#sReset').textContent = 'Erase board'; });
+function renderSettings() {
+  $('#sName').value = state.name;
+  $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
+  $('#sCols').innerHTML = state.columns.map((c, i) => `<div class="ed-row"><input class="inp" id="cn-${c.id}" value="${esc(c.name)}" data-cname="${c.id}" aria-label="Column name">
+    <input class="inp" id="cl-${c.id}" type="number" min="0" style="flex:0 0 64px" value="${c.limit || ''}" placeholder="Limit" data-climit="${c.id}" aria-label="Card limit">
+    <label class="chk"><input type="checkbox" id="cd-${c.id}" data-cdone="${c.id}" ${c.done ? 'checked' : ''}>Finish</label>
+    <button class="btn small" data-cup="${i}" ${i ? '' : 'disabled'} aria-label="Move left">←</button><button class="btn small" data-cdown="${i}" ${i < state.columns.length - 1 ? '' : 'disabled'} aria-label="Move right">→</button>
+    <button class="btn small" data-crm="${c.id}" aria-label="Delete column">✕</button></div>`).join('');
+  $('#sSaveFile').hidden = window.top !== window;
+  $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
+}
+$('#sName').addEventListener('change', e => { state.name = e.target.value.trim() || 'Work Board'; commit(); });
+$('#sAddPerson').addEventListener('click', () => { const n = $('#sNewPerson').value.trim(); if (!n) return; state.people.push({ id: uid(), name: n, color: COLORS[state.people.length % COLORS.length] }); $('#sNewPerson').value = ''; commit(); renderSettings(); toast(`Added ${n}`); });
+$('#sNewPerson').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddPerson').click(); });
+$('#sAddCol').addEventListener('click', () => { const n = $('#sNewCol').value.trim(); if (!n) return; const d = state.columns.findIndex(c => c.done); state.columns.splice(d < 0 ? state.columns.length : d, 0, { id: uid(), name: n }); $('#sNewCol').value = ''; commit(); renderSettings(); });
+$('#sNewCol').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddCol').click(); });
+sd.addEventListener('change', e => {
+  const t = e.target, d = t.dataset;
+  if (d.pname) { const p = person(d.pname); p.name = t.value.trim() || p.name; commit(); }
+  else if (d.pcolor) { person(d.pcolor).color = t.value; commit(); }
+  else if (d.cname) { const c = column(d.cname); c.name = t.value.trim() || c.name; commit(); }
+  else if (d.climit) { const v = parseInt(t.value, 10); column(d.climit).limit = v > 0 ? v : 0; commit(); }
+  else if (d.cdone) { column(d.cdone).done = t.checked; state.cards.forEach(c => { if (c.columnId === d.cdone) { if (t.checked) c.doneAt = c.doneAt || Date.now(); else delete c.doneAt; } }); commit(); }
+});
+sd.addEventListener('click', e => {
+  const d = e.target.dataset;
+  if (d.prm) { const n = state.cards.filter(c => c.owner === d.prm).length; state.people = state.people.filter(p => p.id !== d.prm); state.cards.forEach(c => { if (c.owner === d.prm) c.owner = ''; }); commit(); renderSettings(); toast(n ? `Removed. ${n} cards are now unassigned` : 'Removed'); }
+  if (d.cup || d.cdown) { const i = +(d.cup ?? d.cdown), j = d.cup ? i - 1 : i + 1; [state.columns[i], state.columns[j]] = [state.columns[j], state.columns[i]]; commit(); renderSettings(); }
+  if (d.crm) {
+    if (state.columns.length < 2) return toast('A board needs at least one column');
+    const n = state.cards.filter(c => c.columnId === d.crm).length;
+    if (n) return toast(`Move its ${n} cards out first`);
+    state.columns = state.columns.filter(c => c.id !== d.crm); commit(); renderSettings();
+  }
+});
+const backupText = () => JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 1);
+$('#sCopy').addEventListener('click', () => {
+  const txt = backupText();
+  navigator.clipboard.writeText(txt).then(() => toast('Backup copied. Paste it on the other device'), () => { const p = $('#sPaste'); p.value = txt; p.select(); toast('Copy blocked here. The backup is selected below, copy it manually'); });
+});
+$('#sSaveFile').addEventListener('click', () => {
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([backupText()], { type: 'application/json' }));
+  a.download = `work-board-${isoDay(new Date())}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+});
+function restore(text) {
+  let d; try { d = JSON.parse(text); } catch (e) { return toast('That backup is not valid. Paste the whole text you copied'); }
+  if (!valid(d)) return toast('That text is not a work board backup');
+  delete d.exportedAt; state = d; state.nextNum = Math.max(state.nextNum || 1, ...state.cards.map(c => c.num + 1)); commit(); renderSettings(); $('#sPaste').value = ''; toast(`Restored ${state.cards.length} cards`);
+}
+$('#sRestore').addEventListener('click', () => { const t = $('#sPaste').value.trim(); if (t) restore(t); else toast('Paste a backup into the box first'); });
+$('#sFile').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(restore); e.target.value = ''; });
+let resetArmed = false;
+$('#sReset').addEventListener('click', () => {
+  const b = $('#sReset');
+  if (!resetArmed) { resetArmed = true; b.classList.add('armed'); b.textContent = 'Click again to erase everything'; return; }
+  const me = state.people[0] || { id: uid(), name: 'Juan', color: COLORS[0] };
+  state = { version: 1, name: state.name, people: [me], columns: [{ id: uid(), name: 'To do' }, { id: uid(), name: 'In progress' }, { id: uid(), name: 'Done', done: true }], cards: [], nextNum: 1 };
+  resetArmed = false; b.classList.remove('armed'); b.textContent = 'Erase board'; commit(); renderSettings(); toast('Board erased');
+});
+
+window.addEventListener('storage', e => { if (mode === 'local' && e.key === KEY) { state = load(); render(); } });
+$('#doImport').addEventListener('click', importLocal);
+$('#skipImport').addEventListener('click', () => { try { localStorage.setItem(IMPKEY, '1'); } catch (e) {} $('#importNotice').hidden = true; });
+start();
+})();
+</script>
