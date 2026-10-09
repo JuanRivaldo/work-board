@@ -415,6 +415,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <div class="sect"><h3>Ledger currency</h3><div class="ed-row"><select class="inp" id="sCurrency" style="flex:0 1 240px">
         <option value="IDR">Indonesian rupiah (Rp)</option><option value="USD">US dollar ($)</option><option value="SGD">Singapore dollar (S$)</option><option value="MYR">Malaysian ringgit (RM)</option>
         <option value="EUR">Euro (€)</option><option value="GBP">British pound (£)</option><option value="AUD">Australian dollar (A$)</option><option value="JPY">Japanese yen (¥)</option></select></div></div>
+      <div class="sect"><h3>Clear ledger</h3><p id="sLedInfo"></p>
+        <div class="ed-row"><button class="btn small danger" id="sLedClear">Remove all entries</button></div></div>
       <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p>Cards with a due date appear as all-day events on your Google Calendar, and the card's owner is invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don't get duplicate update emails.</p>
         <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
@@ -1032,6 +1034,12 @@ $('#entryForm').addEventListener('submit', ev => {
   eDlg.close(); commit(); toast(editingE ? 'Entry saved' : `Recorded ${fmtMoney(data.kind === 'in' ? amount : -amount, true)}`);
 });
 $('#sCurrency').addEventListener('change', e => { state.currency = e.target.value; commit(); });
+let ledArmed = false;
+$('#sLedClear').addEventListener('click', () => {
+  const b = $('#sLedClear'); if (!ledArmed) { ledArmed = true; b.classList.add('armed'); b.textContent = 'Click again to remove them all'; return; }
+  const id = P().id, first = state.projects[0].id, n = pl().length;
+  state.ledger = state.ledger.filter(e => (e.projectId || first) !== id); commit(); renderAnySettings(); toast(`Removed ${n} ledger entries`);
+});
 
 /* Share a card: a prefilled Google Calendar event (inviting the owner) and an email to the owner. */
 const ymd = s => s.replace(/-/g, '');
@@ -1183,6 +1191,8 @@ function renderSettings() {
   renderStages();
   $('#sSaveFile').hidden = window.top !== window;
   $('#sCurrency').value = state.currency || 'IDR';
+  const nl = pl().length; $('#sLedInfo').textContent = nl ? `Removes all ${nl} ledger entries in ${P().name}. This can't be undone, so copy them as CSV first if you might need them.` : `${P().name} has no ledger entries.`;
+  $('#sLedClear').disabled = !nl; ledArmed = false; $('#sLedClear').classList.remove('armed'); $('#sLedClear').textContent = 'Remove all entries';
   $('#sCal').hidden = !gcalAvailable();
   $('#sCalState').textContent = !gcal.on ? 'Not connected on this device.' : gcalLive() ? 'Connected on this device.' : 'Connected, but Google needs you to sign in again.';
   $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() ? 'Stop syncing' : 'Reconnect';
