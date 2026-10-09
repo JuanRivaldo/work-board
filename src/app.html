@@ -274,6 +274,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <div class="row">
         <label class="field"><span>Priority</span><select id="cPriority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
         <label class="field"><span>Due date</span><input id="cDue" type="date"></label>
+        <label class="field"><span>Time <i class="hint">optional</i></span><input id="cTime" type="time"></label>
       </div>
       <label class="field"><span>Tags</span><input id="cTags" placeholder="Comma separated, e.g. client, finance"></label>
       <label class="field"><span>Notes</span><textarea id="cNotes" placeholder="Details, links, decisions"></textarea></label>
@@ -460,7 +461,7 @@ const initials = n => n.trim().split(/\s+/).map(w => w[0]).slice(0, 2).join('').
 function dueState(card) {
   if (!card.due || doneIds().has(card.columnId)) return card.due ? '' : null;
   const t = isoDay(new Date()), w = addDays(7);
-  if (card.due < t) return 'overdue';
+  if (card.due < t || (card.due === t && card.time && card.time <= new Date().toTimeString().slice(0, 5))) return 'overdue';
   if (card.due <= addDays(2)) return 'soon';
   return card.due <= w ? 'week' : 'later';
 }
@@ -511,7 +512,7 @@ function renderStrip() {
 function cardHtml(c) {
   const p = person(c.owner), ds = dueState(c), done = doneIds().has(c.columnId);
   const ck = c.checklist.length ? `<span class="ck ${c.checklist.every(i => i.done) ? 'full' : ''}">☑ ${c.checklist.filter(i => i.done).length}/${c.checklist.length}</span>` : '';
-  const due = c.due ? `<span class="due ${ds === 'overdue' ? 'overdue' : ds === 'soon' ? 'soon' : ''}" title="Due date">${ds === 'overdue' ? 'Overdue · ' : ''}${fmtDay(c.due)}</span>` : '';
+  const due = c.due ? `<span class="due ${ds === 'overdue' ? 'overdue' : ds === 'soon' ? 'soon' : ''}" title="Due date">${ds === 'overdue' ? 'Overdue · ' : ''}${fmtDay(c.due)}${c.time ? ' · ' + c.time : ''}</span>` : '';
   const tags = c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('');
   const av = p ? `<span class="av" style="background:${esc(p.color)}" title="${esc(p.name)}">${esc(initials(p.name))}</span>` : '';
   return `<article class="card p-${c.priority}${done ? ' done' : ''}" data-id="${c.id}" tabindex="0" aria-label="${esc(c.title)}">
@@ -736,6 +737,7 @@ function openCard(id, colId) {
   $('#cOwner').value = c ? (person(c.owner) ? c.owner : '') : (ui.person && ui.person !== '_none' ? ui.person : state.people[0]?.id || '');
   $('#cPriority').value = c?.priority || 'normal';
   $('#cDue').value = c?.due || '';
+  $('#cTime').value = c?.due && c?.time || '';
   $('#cTags').value = c?.tags.join(', ') || '';
   $('#cNotes').value = c?.notes || '';
   draftList = (c?.checklist || []).map(i => ({ ...i }));
@@ -763,13 +765,19 @@ function saveG() { try { localStorage.setItem(GKEY, JSON.stringify(gcal)); } cat
 function gcalAvailable() { return !!(window.WB_SUPA && window.WB_SUPA.googleClientId) && window.top === window; }
 const gcalLive = () => !!gcal.token && Date.now() < gcal.exp;
 const evId = c => 'tb' + [...c.id].map(ch => ch.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+/* A card with a time becomes a one-hour event in this device's time zone; without one it is an all-day event.
+   The unused fields are sent as null so a PATCH can switch an existing event between the two. */
+const TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
+function endHour(day, time) { const d = new Date(`${day}T${time}:00`); d.setHours(d.getHours() + 1); return [isoDay(d), d.toTimeString().slice(0, 5)]; }
+function timed(day, time) { const [d2, t2] = endHour(day, time); return { start: { date: null, dateTime: `${day}T${time}:00`, timeZone: TZ }, end: { date: null, dateTime: `${d2}T${t2}:00`, timeZone: TZ } }; }
 function calEvent(c) {
   if (!c.due) return null;
   const proj = state.projects.find(p => p.id === cardProject(c)); if (!proj) return null;
   const col = proj.columns.find(x => x.id === c.columnId); if (!col || col.done) return null;
   const owner = person(c.owner), end = new Date(c.due + 'T00:00:00'); end.setDate(end.getDate() + 1);
   const steps = (c.checklist || []).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
-  return { summary: c.title, start: { date: c.due }, end: { date: isoDay(end) }, status: 'confirmed',
+  const when = c.time ? timed(c.due, c.time) : { start: { date: c.due, dateTime: null, timeZone: null }, end: { date: isoDay(end), dateTime: null, timeZone: null } };
+  return { summary: c.title, ...when, status: 'confirmed',
     description: [`${proj.name} · ${col.name} · T-${String(c.num).padStart(3, '0')}`, c.notes, steps, location.origin + location.pathname].filter(Boolean).join('\n\n'),
     attendees: owner && owner.email ? [{ email: owner.email }] : [] };
 }
@@ -939,19 +947,21 @@ $('#sCurrency').addEventListener('change', e => { state.currency = e.target.valu
 /* Share a card: a prefilled Google Calendar event (inviting the owner) and an email to the owner. */
 const ymd = s => s.replace(/-/g, '');
 function updateShare() {
-  const title = $('#cTitle').value.trim() || 'Untitled card', due = $('#cDue').value, owner = person($('#cOwner').value);
+  const title = $('#cTitle').value.trim() || 'Untitled card', due = $('#cDue').value, time = due ? $('#cTime').value : '', owner = person($('#cOwner').value);
   const col = column($('#cCol').value), tkt = $('#cTkt').textContent;
   const steps = draftList.filter(i => i.text.trim()).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
   const details = [`${P().name}${col ? ' · ' + col.name : ''}${tkt ? ' · ' + tkt : ''}`, $('#cNotes').value.trim(), steps].filter(Boolean).join('\n\n');
   const cal = $('#cCal'), mail = $('#cMail');
   if (due) {
     const end = new Date(due + 'T00:00:00'); end.setDate(end.getDate() + 1);
-    const q = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: `${ymd(due)}/${ymd(isoDay(end))}`, details });
+    const hm = t => t.replace(':', '') + '00', [d2, t2] = time ? endHour(due, time) : [];
+    const q = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: time ? `${ymd(due)}T${hm(time)}/${ymd(d2)}T${hm(t2)}` : `${ymd(due)}/${ymd(isoDay(end))}`, details });
+    if (time) q.set('ctz', TZ);
     if (owner && owner.email) q.set('add', owner.email);
     cal.href = 'https://calendar.google.com/calendar/render?' + q.toString(); cal.removeAttribute('aria-disabled');
   } else { cal.removeAttribute('href'); cal.setAttribute('aria-disabled', 'true'); }
   if (owner && owner.email) {
-    const body = `${title}\n${due ? 'Due ' + fmtDay(due) + '\n' : ''}\n${details}`;
+    const body = `${title}\n${due ? 'Due ' + fmtDay(due) + (time ? ' ' + time : '') + '\n' : ''}\n${details}`;
     mail.href = `mailto:${encodeURIComponent(owner.email)}?subject=${encodeURIComponent((tkt ? `[${tkt}] ` : '') + title)}&body=${encodeURIComponent(body)}`; mail.removeAttribute('aria-disabled');
   } else { mail.removeAttribute('href'); mail.setAttribute('aria-disabled', 'true'); }
   const auto = gcalAvailable() && gcal.on;
@@ -966,7 +976,7 @@ $('#cardForm').addEventListener('submit', e => {
   const title = $('#cTitle').value.trim(); if (!title) return;
   const pending = $('#cNewItem').value.trim(); if (pending) { draftList.push({ text: pending, done: false }); $('#cNewItem').value = ''; }
   const colId = $('#cCol').value, now = Date.now();
-  const data = { title, columnId: colId, owner: $('#cOwner').value, priority: $('#cPriority').value, due: $('#cDue').value,
+  const data = { title, columnId: colId, owner: $('#cOwner').value, priority: $('#cPriority').value, due: $('#cDue').value, time: $('#cDue').value ? $('#cTime').value : '',
     tags: [...new Set($('#cTags').value.split(',').map(s => s.trim()).filter(Boolean))], notes: $('#cNotes').value.trim(),
     checklist: draftList.filter(i => i.text.trim()), updatedAt: now };
   if (editing) {
