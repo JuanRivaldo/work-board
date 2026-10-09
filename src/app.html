@@ -1193,7 +1193,7 @@ function receiptCalc(r, people) {
   const share = {}; people.forEach(p => { share[p.id] = { items: sub[p.id], extra: tagged ? extra * sub[p.id] / tagged : 0 }; });
   return { share, itemsTotal, extra, ch, total: itemsTotal + extra, untagged };
 }
-/* Service is a % of the items (or a fixed amount), tax is a % of the items only, other fees are fixed amounts.
+/* Service and tax are each a % of the items (old bills may hold fixed amounts), other fees are fixed amounts.
    Percentages are kept as percentages so the amounts follow the items as they change. */
 function receiptCharges(r, items) {
   if (items == null) items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
@@ -1203,6 +1203,12 @@ function receiptCharges(r, items) {
   return { items, service, tax, fees, discount: Number(r.discount) || 0 };
 }
 const pctText = v => String(Math.round(Number(v) * 100) / 100);
+/* Older bills stored service/tax as amounts; show them as the % of the food they come to. */
+function pctShown(r, k) {
+  if (Number(r[k + 'Pct'])) return pctText(r[k + 'Pct']);
+  const items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
+  return Number(r[k]) && items ? pctText(Number(r[k]) / items * 100) : '';
+}
 /* Everyone's share across all receipts, what they paid, and the fewest payments that settle it. */
 function billSettle(b) {
   const rc = b.receipts.map(r => ({ r, c: receiptCalc(r, b.people) }));
@@ -1248,8 +1254,8 @@ function receiptHtml(b, r, n) {
       </div>`).join('')}</div>
       <div class="ed-row"><button type="button" class="btn small" data-iadd="${r.id}">+ Add item</button></div>
       <div class="charges">
-        <label class="field"><span>Service</span><input class="inp" data-c="service" value="${Number(r.servicePct) ? pctText(r.servicePct) + '%' : r.service ? esc(fmtPlain(r.service)) : ''}" placeholder="5% or 5000"></label>
-        <label class="field"><span>Tax %</span><input class="inp" data-c="tax" inputmode="decimal" value="${Number(r.taxPct) ? pctText(r.taxPct) : r.tax ? esc(fmtPlain(r.tax)) : ''}" placeholder="e.g. 10"></label>
+        <label class="field"><span>Service %</span><input class="inp" data-c="service" inputmode="decimal" value="${pctShown(r, 'service')}" placeholder="e.g. 5"></label>
+        <label class="field"><span>Tax %</span><input class="inp" data-c="tax" inputmode="decimal" value="${pctShown(r, 'tax')}" placeholder="e.g. 11"></label>
         <label class="field"><span>Discount</span><input class="inp" data-c="discount" value="${r.discount ? esc(fmtPlain(r.discount)) : ''}" placeholder="0"></label>
         <label class="field"><span>Paid by</span><select class="inp" data-rf="payer"><option value="">Who paid?</option>${opts}</select></label>
       </div>
@@ -1401,9 +1407,7 @@ $('#bills').addEventListener('change', e => {
   if (t.dataset.rf === 'name') { r.name = t.value.trim() || 'Bill'; return touch(b); }
   if (t.dataset.rf === 'payer') { r.payer = t.value; return touch(b); }
   if (t.dataset.c === 'tax') { const v = t.value.trim(); r.taxPct = v ? Math.abs(parseFloat(v.replace('%', '').replace(',', '.'))) || 0 : 0; r.tax = 0; t.value = r.taxPct ? pctText(r.taxPct) : ''; return touch(b); }
-  if (t.dataset.c === 'service') { const v = t.value.trim();
-    if (v.endsWith('%')) { r.servicePct = Math.abs(parseFloat(v.replace(',', '.'))) || 0; r.service = 0; } else { r.servicePct = 0; r.service = v ? Math.abs(parseAmount(v)) : 0; }
-    t.value = r.servicePct ? pctText(r.servicePct) + '%' : r.service ? fmtPlain(r.service) : ''; return touch(b); }
+  if (t.dataset.c === 'service') { const v = t.value.trim(); r.servicePct = v ? Math.abs(parseFloat(v.replace('%', '').replace(',', '.'))) || 0 : 0; r.service = 0; t.value = r.servicePct ? pctText(r.servicePct) : ''; return touch(b); }
   if (t.dataset.c) { r[t.dataset.c] = chargeValue(r, t.dataset.c, t.value); t.value = r[t.dataset.c] ? fmtPlain(r[t.dataset.c]) : ''; return touch(b); }
   if (t.dataset.ff) { const f = (r.fees || []).find(x => x.id === t.closest('[data-fee]').dataset.fee); if (!f) return;
     if (t.dataset.ff === 'name') f.name = t.value.trim(); else { f.amount = Math.abs(parseAmount(t.value)); t.value = f.amount ? fmtPlain(f.amount) : ''; } return touch(b); }
@@ -1508,8 +1512,8 @@ async function scanBill(b, r, file) {
     const found = parseReceipt(res.data.text);
     if (!found.items.length) { setScanR('No items found. Try a sharper, straight-on photo, or type the items in.'); return; }
     found.items.forEach(it => r.items.push({ id: uid(), qty: it.qty, name: it.name, price: it.price, who: [] }));
-    // Tax is left out on purpose: you type the tax % yourself, and it follows the items.
-    ['service', 'discount'].forEach(k => { if (found[k]) r[k] = found[k]; });
+    // Service and tax are left out on purpose: you type their % yourself.
+    if (found.discount) r.discount = found.discount;
     if (found.total) r.scannedTotal = found.total;
     scanState[r.id] = `Found ${found.items.length} items. Check them, then tag who ordered each one.`;
     touch(b, true);
