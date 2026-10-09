@@ -253,6 +253,9 @@ table.led tr.opening td { color: var(--muted); font-style: italic; }
 .scan { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .rc-head { display: flex; gap: 8px; align-items: center; padding: 12px 14px 4px; }
 .rc-head .inp { font: 600 15px var(--display); flex: 1; }
+.fees .fee .inp:first-child { flex: 1 1 160px; } .fees .fee .price { flex: 0 1 130px; text-align: right; font-family: var(--mono); }
+.rc-break { flex-basis: 100%; color: var(--muted); font-size: 12px; font-weight: 400; font-family: var(--mono); display: flex; flex-wrap: wrap; gap: 2px 14px; justify-content: flex-end; }
+.rc-total { flex-wrap: wrap; }
 .rc-total { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; border-top: 1px solid var(--line); padding-top: 10px; }
 .rc-total .v, .pay .v { font-family: var(--mono); font-variant-numeric: tabular-nums; text-align: right; }
 .rc-total small { display: block; color: var(--muted); font-weight: 400; font-size: 12px; }
@@ -1171,14 +1174,14 @@ $('#impForm').addEventListener('submit', ev => {
   ui.ledMonth = ''; saveUi(); iDlg.close(); commit(); toast(`Imported ${added} new entries` + (iRows.length - added ? `, updated ${iRows.length - added}` : ''));
 });
 /* ---- Split bill. One split (an outing) holds one or more receipts; each receipt has its own items, charges and
-   payer. Service, tax and discount are shared within a receipt in proportion to what each person ordered.
+   payer. Service, tax, other fees and discount are shared within a receipt in proportion to what each person ordered.
    People on a split are separate from the board's people. A split can be shared by link so guests tag
    their own items (hosted site only, through the shared_bill* functions in bill-sharing.sql). ---- */
 const pb = () => { const id = P().id, first = state.projects[0].id; return state.bills.filter(b => (b.projectId || first) === id); };
 const curBill = () => { const b = pb().find(b => b.id === ui.bill); if (b) normBill(b); return b; };
 let billArmed = false, scanState = {}, billFocusRender = false;
 function persist() { if (mode === 'local') save(); else if (mode === 'cloud') pushCloud(); }
-const newReceipt = n => ({ id: uid(), name: `Bill ${n}`, items: [], service: 0, tax: 0, discount: 0, payer: '' });
+const newReceipt = n => ({ id: uid(), name: `Bill ${n}`, items: [], service: 0, servicePct: 0, tax: 0, taxPct: 0, fees: [], discount: 0, payer: '' });
 /* Splits saved before receipts existed had one set of items at the top level. */
 function normBill(b) {
   if (!Array.isArray(b.receipts)) { b.receipts = [{ id: uid(), name: 'Bill 1', items: b.items || [], service: b.service || 0, tax: b.tax || 0, discount: b.discount || 0, payer: b.payer || '', scannedTotal: b.scannedTotal || 0 }]; ['items', 'service', 'tax', 'discount', 'payer', 'scannedTotal'].forEach(k => delete b[k]); }
@@ -1200,10 +1203,21 @@ function receiptCalc(r, people) {
     if (!who.length) { if (price) untagged.push(it); continue; }
     who.forEach(id => { sub[id] += price / who.length; });
   }
-  const tagged = Object.values(sub).reduce((t, v) => t + v, 0), extra = (Number(r.service) || 0) + (Number(r.tax) || 0) - (Number(r.discount) || 0);
+  const ch = receiptCharges(r, itemsTotal), extra = ch.service + ch.tax + ch.fees - ch.discount;
+  const tagged = Object.values(sub).reduce((t, v) => t + v, 0);
   const share = {}; people.forEach(p => { share[p.id] = { items: sub[p.id], extra: tagged ? extra * sub[p.id] / tagged : 0 }; });
-  return { share, itemsTotal, extra, total: itemsTotal + extra, untagged };
+  return { share, itemsTotal, extra, ch, total: itemsTotal + extra, untagged };
 }
+/* Service is a % of the items (or a fixed amount), tax is a % of items + service, other fees are fixed amounts.
+   Percentages are kept as percentages so the amounts follow the items as they change. */
+function receiptCharges(r, items) {
+  if (items == null) items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
+  const service = Number(r.servicePct) ? items * Number(r.servicePct) / 100 : Number(r.service) || 0;
+  const tax = Number(r.taxPct) ? (items + service) * Number(r.taxPct) / 100 : Number(r.tax) || 0;
+  const fees = (r.fees || []).reduce((t, f) => t + (Number(f.amount) || 0), 0);
+  return { items, service, tax, fees, discount: Number(r.discount) || 0 };
+}
+const pctText = v => String(Math.round(Number(v) * 100) / 100);
 /* Everyone's share across all receipts, what they paid, and the fewest payments that settle it. */
 function billSettle(b) {
   const rc = b.receipts.map(r => ({ r, c: receiptCalc(r, b.people) }));
@@ -1249,11 +1263,13 @@ function receiptHtml(b, r, n) {
       </div>`).join('')}</div>
       <div class="ed-row"><button type="button" class="btn small" data-iadd="${r.id}">+ Add item</button></div>
       <div class="charges">
-        <label class="field"><span>Service</span><input class="inp" data-c="service" value="${r.service ? esc(fmtPlain(r.service)) : ''}" placeholder="0 or 5%"></label>
-        <label class="field"><span>Tax</span><input class="inp" data-c="tax" value="${r.tax ? esc(fmtPlain(r.tax)) : ''}" placeholder="0 or 10%"></label>
+        <label class="field"><span>Service</span><input class="inp" data-c="service" value="${Number(r.servicePct) ? pctText(r.servicePct) + '%' : r.service ? esc(fmtPlain(r.service)) : ''}" placeholder="5% or 5000"></label>
+        <label class="field"><span>Tax %</span><input class="inp" data-c="tax" inputmode="decimal" value="${Number(r.taxPct) ? pctText(r.taxPct) : r.tax ? esc(fmtPlain(r.tax)) : ''}" placeholder="e.g. 10"></label>
         <label class="field"><span>Discount</span><input class="inp" data-c="discount" value="${r.discount ? esc(fmtPlain(r.discount)) : ''}" placeholder="0"></label>
         <label class="field"><span>Paid by</span><select class="inp" data-rf="payer"><option value="">Who paid?</option>${opts}</select></label>
       </div>
+      <div class="fees">${(r.fees || []).map(f => `<div class="ed-row fee" data-fee="${f.id}"><input class="inp" data-ff="name" value="${esc(f.name)}" placeholder="Fee name, e.g. Delivery" aria-label="Fee name" maxlength="40"><input class="inp price" data-ff="amount" value="${f.amount ? esc(fmtPlain(f.amount)) : ''}" inputmode="decimal" placeholder="Amount" aria-label="Fee amount"><button type="button" class="btn ghost small" data-frm="${f.id}" aria-label="Remove fee">✕</button></div>`).join('')}
+        <div class="ed-row"><button type="button" class="btn small" data-fadd="${r.id}">+ Other fee</button></div></div>
       <div class="rc-total" data-rctotal="${r.id}"></div>
     </div></section>`;
 }
@@ -1301,7 +1317,7 @@ function renderShare(b) {
 function renderBillSummary() {
   const b = curBill(), el = $('#bSummary'); if (!b || !el) return;
   const st = billSettle(b), cur = b.currency;
-  st.rc.forEach(({ r, c }) => { const t = document.querySelector(`[data-rctotal="${r.id}"]`); if (t) t.innerHTML = `<span>${esc(r.name)} total</span><span class="v">${fmtMoney(roundMoney(c.total, cur))}${r.scannedTotal ? `<small>receipt says ${fmtMoney(r.scannedTotal)}${Math.abs(r.scannedTotal - c.total) >= 1 ? ' · check the items' : ' ✓'}</small>` : ''}</span>`; });
+  st.rc.forEach(({ r, c }) => { const t = document.querySelector(`[data-rctotal="${r.id}"]`); if (t) t.innerHTML = `${chargeLine(r, c, cur)}<span>${esc(r.name)} total</span><span class="v">${fmtMoney(roundMoney(c.total, cur))}${r.scannedTotal ? `<small>receipt says ${fmtMoney(r.scannedTotal)}${Math.abs(r.scannedTotal - (c.total - c.ch.fees)) >= 1 ? ' · check the items and charges' : ' ✓'}</small>` : ''}</span>`; });
   const warn = [];
   if (!b.people.length) warn.push('Add the people who were there.');
   if (st.untagged.length) warn.push(`${st.untagged.length} item${st.untagged.length === 1 ? ' has' : 's have'} no one tagged yet (${fmtMoney(roundMoney(st.untagged.reduce((t, i) => t + (Number(i.price) || 0), 0), cur))}).`);
@@ -1313,6 +1329,16 @@ function renderBillSummary() {
     (!st.transfers.length && st.payments.length && !st.untagged.length ? '<div class="warn-line" style="color:var(--ok)">Everyone is settled up.</div>' : '') +
     `<div class="split-row total"><span>All bills</span><span class="v">${fmtMoney(roundMoney(st.total, cur))}</span></div>`;
   document.querySelectorAll('#bills .item').forEach(row => { const it = b.receipts.flatMap(r => r.items).find(i => i.id === row.dataset.item); if (it) row.classList.toggle('untagged', !!b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id))); });
+}
+function chargeLine(r, c, cur) {
+  const ch = c.ch, parts = [];
+  if (!(ch.service || ch.tax || ch.fees || ch.discount)) return '';
+  parts.push(`Food ${fmtMoney(roundMoney(ch.items, cur))}`);
+  if (ch.service) parts.push(`Service${Number(r.servicePct) ? ` ${pctText(r.servicePct)}%` : ''} ${fmtMoney(roundMoney(ch.service, cur))}`);
+  if (ch.tax) parts.push(`Tax${Number(r.taxPct) ? ` ${pctText(r.taxPct)}%` : ''} ${fmtMoney(roundMoney(ch.tax, cur))}`);
+  (r.fees || []).filter(f => Number(f.amount)).forEach(f => parts.push(`${esc(f.name || 'Other fee')} ${fmtMoney(roundMoney(f.amount, cur))}`));
+  if (ch.discount) parts.push(`Discount −${fmtMoney(roundMoney(ch.discount, cur))}`);
+  return `<div class="rc-break">${parts.map(x => `<span>${x}</span>`).join('')}</div>`;
 }
 function billText(b) {
   const st = billSettle(b), cur = b.currency, lines = [`${b.title} · ${fmtDay(b.date)}`, `Total ${fmtMoney(roundMoney(st.total, cur))}`];
@@ -1351,6 +1377,8 @@ $('#bills').addEventListener('click', e => {
   if (t.dataset.all) { const { it } = findItem(b, t.dataset.all); const all = b.people.every(p => (it.who || []).includes(p.id)); it.who = all ? [] : b.people.map(p => p.id); return touch(b, true); }
   if (t.dataset.irm) { b.receipts.forEach(r => { r.items = r.items.filter(i => i.id !== t.dataset.irm); }); return touch(b, true); }
   if (t.dataset.iadd) { const r = b.receipts.find(x => x.id === t.dataset.iadd); r.items.push({ id: uid(), qty: 1, name: '', price: 0, who: [] }); touch(b, true); const ins = document.querySelectorAll(`[data-rc="${r.id}"] .item [data-f="name"]`); if (ins.length) ins[ins.length - 1].focus(); return; }
+  if (t.dataset.fadd) { const r = b.receipts.find(x => x.id === t.dataset.fadd); (r.fees = r.fees || []).push({ id: uid(), name: '', amount: 0 }); touch(b, true); const ins = document.querySelectorAll(`[data-rc="${r.id}"] [data-ff="name"]`); if (ins.length) ins[ins.length - 1].focus(); return; }
+  if (t.dataset.frm) { const r = b.receipts.find(x => (x.fees || []).some(f => f.id === t.dataset.frm)); if (r) { r.fees = r.fees.filter(f => f.id !== t.dataset.frm); touch(b, true); } return; }
   if (t.id === 'bAddReceipt') { b.receipts.push(newReceipt(b.receipts.length + 1)); touch(b, true); const ins = document.querySelectorAll('[data-rc] [data-rf="name"]'); ins[ins.length - 1].scrollIntoView({ block: 'center' }); return; }
   if (t.dataset.rcrm) {
     if (t.dataset.armed !== '1') { t.dataset.armed = '1'; t.classList.add('danger', 'armed'); t.textContent = 'Click again to remove'; return; }
@@ -1376,6 +1404,7 @@ $('#bills').addEventListener('click', e => {
 });
 $('#bills').addEventListener('input', e => {
   const b = curBill(); if (!b) return; const t = e.target, row = t.closest('[data-item]');
+  if (t.dataset.ff === 'amount') { const rcEl = t.closest('[data-rc]'), r = rcEl && b.receipts.find(x => x.id === rcEl.dataset.rc), f = r && (r.fees || []).find(x => x.id === t.closest('[data-fee]').dataset.fee); if (f) { f.amount = Math.abs(parseAmount(t.value)); renderBillSummary(); } return; }
   if (row) { const { it } = findItem(b, row.dataset.item); if (!it) return;
     if (t.dataset.f === 'name') it.name = t.value; else if (t.dataset.f === 'qty') it.qty = Math.max(1, parseInt(t.value, 10) || 1); else if (t.dataset.f === 'price') it.price = Math.abs(parseAmount(t.value)); renderBillSummary(); }
 });
@@ -1386,7 +1415,13 @@ $('#bills').addEventListener('change', e => {
   if (!r) return;
   if (t.dataset.rf === 'name') { r.name = t.value.trim() || 'Bill'; return touch(b); }
   if (t.dataset.rf === 'payer') { r.payer = t.value; return touch(b); }
+  if (t.dataset.c === 'tax') { const v = t.value.trim(); r.taxPct = v ? Math.abs(parseFloat(v.replace('%', '').replace(',', '.'))) || 0 : 0; r.tax = 0; t.value = r.taxPct ? pctText(r.taxPct) : ''; return touch(b); }
+  if (t.dataset.c === 'service') { const v = t.value.trim();
+    if (v.endsWith('%')) { r.servicePct = Math.abs(parseFloat(v.replace(',', '.'))) || 0; r.service = 0; } else { r.servicePct = 0; r.service = v ? Math.abs(parseAmount(v)) : 0; }
+    t.value = r.servicePct ? pctText(r.servicePct) + '%' : r.service ? fmtPlain(r.service) : ''; return touch(b); }
   if (t.dataset.c) { r[t.dataset.c] = chargeValue(r, t.dataset.c, t.value); t.value = r[t.dataset.c] ? fmtPlain(r[t.dataset.c]) : ''; return touch(b); }
+  if (t.dataset.ff) { const f = (r.fees || []).find(x => x.id === t.closest('[data-fee]').dataset.fee); if (!f) return;
+    if (t.dataset.ff === 'name') f.name = t.value.trim(); else { f.amount = Math.abs(parseAmount(t.value)); t.value = f.amount ? fmtPlain(f.amount) : ''; } return touch(b); }
   if (t.closest('[data-item]')) { if (t.dataset.f === 'price') { const { it } = findItem(b, t.closest('[data-item]').dataset.item); t.value = it.price ? fmtPlain(it.price) : ''; } return touch(b); }
 });
 $('#bills').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'bNewPerson') { e.preventDefault(); $('#bAddPerson').click(); } });
@@ -1436,7 +1471,7 @@ async function startGuest(cfg, token) {
         return `<section class="panel"><h3>${esc(r.name)}<span class="hint" style="font-weight:400"> · ${fmtMoney(roundMoney(c.total, cur))}${payer ? ` · paid by ${esc(payer.name)}` : ''}</span></h3>
           ${r.items.map(it => { const on = (it.who || []).includes(me.id), others = (it.who || []).filter(id => id !== me.id).map(id => bill.people.find(p => p.id === id)).filter(Boolean).map(p => p.name);
             return `<button type="button" class="g-item" data-gi="${it.id}" aria-pressed="${on}"><span class="box">${on ? '✓' : ''}</span><span class="nm">${(it.qty || 1) > 1 ? it.qty + '× ' : ''}${esc(it.name || 'Item')}${others.length ? `<small>${on ? 'Shared with' : 'Tagged by'} ${esc(others.join(', '))}</small>` : ''}</span><span class="v">${fmtMoney(it.price || 0)}</span></button>`; }).join('') || '<p class="hint" style="padding:0 14px 12px">No items yet.</p>'}
-          ${c.extra ? `<p class="hint" style="padding:8px 14px 12px;border-top:1px solid var(--line)">Service, tax and discount (${fmtMoney(roundMoney(c.extra, cur), true)}) are shared by what each person ordered.</p>` : ''}</section>`; }).join('') +
+          ${c.extra ? `<p class="hint" style="padding:8px 14px 12px;border-top:1px solid var(--line)">Service, tax, other fees and discount (${fmtMoney(roundMoney(c.extra, cur), true)}) are shared by what each person ordered.</p>` : ''}</section>`; }).join('') +
       `<div class="g-me"><div class="g-tot"><span>Your share</span><b>${fmtMoney(roundMoney(x.total, cur))}</b></div>
         ${pays.map(t => `<div class="hint">${t.from.id === me.id ? `You pay <b>${esc(t.to.name)}</b> ${fmtMoney(t.amount)}` : `<b>${esc(t.from.name)}</b> pays you ${fmtMoney(t.amount)}`}</div>`).join('')}
         ${st.payments.filter(p => p.from === me.id || p.to === me.id).map(p => `<div class="hint" style="color:var(--ok)">✓ ${p.from === me.id ? `You paid <b>${esc(p.toName)}</b>` : `<b>${esc(p.fromName)}</b> paid you`} ${fmtMoney(p.amount)}</div>`).join('')}
@@ -1488,7 +1523,8 @@ async function scanBill(b, r, file) {
     const found = parseReceipt(res.data.text);
     if (!found.items.length) { setScanR('No items found. Try a sharper, straight-on photo, or type the items in.'); return; }
     found.items.forEach(it => r.items.push({ id: uid(), qty: it.qty, name: it.name, price: it.price, who: [] }));
-    ['service', 'tax', 'discount'].forEach(k => { if (found[k]) r[k] = found[k]; });
+    // Tax is left out on purpose: you type the tax % yourself, and it follows the items.
+    ['service', 'discount'].forEach(k => { if (found[k]) r[k] = found[k]; });
     if (found.total) r.scannedTotal = found.total;
     scanState[r.id] = `Found ${found.items.length} items. Check them, then tag who ordered each one.`;
     touch(b, true);
