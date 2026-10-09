@@ -119,6 +119,7 @@ select.f { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; 
 .tag { padding: 1px 6px; border-radius: 4px; border: 1px solid var(--line); font-size: 11.5px; }
 .ck { font: 11.5px var(--mono); }
 .ck.full { color: var(--ok); }
+.avs { margin-left: auto; display: flex; flex: none; } .avs .av { margin-left: -5px; box-shadow: 0 0 0 2px var(--surface); } .avs .av:first-child { margin-left: 0; }
 .av { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font: 600 10px var(--body); color: #fff; flex: none; }
 .placeholder { border: 2px dashed var(--accent); border-radius: 6px; background: var(--accent-soft); }
 .drag-ghost { position: fixed; z-index: 50; pointer-events: none; transform: rotate(2deg); box-shadow: 0 10px 24px rgba(0,0,0,.22); margin: 0; }
@@ -345,7 +346,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <label class="field"><span>Title</span><input id="cTitle" required maxlength="200" placeholder="What needs to happen?"></label>
       <div class="row">
         <label class="field"><span>Stage</span><select id="cCol"></select></label>
-        <label class="field"><span>Owner</span><select id="cOwner"></select></label>
+        <div class="field"><span>Owners</span><div class="ppl" id="cOwners" role="group" aria-label="Owners"></div></div>
       </div>
       <div class="row">
         <label class="field"><span>Priority</span><select id="cPriority"><option value="low">Low</option><option value="normal">Normal</option><option value="high">High</option><option value="urgent">Urgent</option></select></label>
@@ -473,7 +474,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <option value="EUR">Euro (€)</option><option value="GBP">British pound (£)</option><option value="AUD">Australian dollar (A$)</option><option value="JPY">Japanese yen (¥)</option></select></div></div>
       <div class="sect" hidden><h3>Clear ledger</h3><p id="sLedInfo"></p>
         <div class="ed-row"><button class="btn small danger" id="sLedClear">Remove all entries</button></div></div>
-      <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p>Cards with a due date appear as all-day events on your Google Calendar, and the card's owner is invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don't get duplicate update emails.</p>
+      <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p>Cards with a due date appear as all-day events on your Google Calendar, and the card's owners are invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don't get duplicate update emails.</p>
         <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
       <div class="sect"><h3>Start over</h3><p>Erases every project, card, person and stage.</p>
@@ -543,6 +544,8 @@ try { Object.assign(ui, JSON.parse(localStorage.getItem(UIKEY) || '{}'), { q: ''
 const saveUi = () => { try { localStorage.setItem(UIKEY, JSON.stringify(ui)); } catch (e) {} };
 
 const person = id => state.people.find(p => p.id === id);
+const ownerIds = c => (Array.isArray(c.owners) ? c.owners : c.owner ? [c.owner] : []).filter(id => person(id));
+const ownersOf = c => ownerIds(c).map(person);
 const P = () => state.projects.find(p => p.id === ui.project) || state.projects[0];
 const cardProject = c => c.projectId || state.projects[0].id;
 const pc = () => { const id = P().id; return state.cards.filter(c => cardProject(c) === id); };
@@ -557,12 +560,12 @@ function dueState(card) {
   return card.due <= w ? 'week' : 'later';
 }
 function matches(card) {
-  if (ui.person === '_none' ? card.owner : (ui.person && card.owner !== ui.person)) return false;
+  if (ui.person === '_none' ? ownerIds(card).length : (ui.person && !ownerIds(card).includes(ui.person))) return false;
   if (ui.priority && card.priority !== ui.priority) return false;
   if (ui.due) { const s = dueState(card); if (ui.due === 'overdue' && s !== 'overdue') return false; if (ui.due === 'week' && !['overdue', 'soon', 'week'].includes(s)) return false; }
   if (ui.q) {
-    const q = ui.q.toLowerCase(), p = person(card.owner);
-    const hay = [card.title, card.notes, card.tags.join(' '), p?.name, 'T-' + card.num, ...card.checklist.map(i => i.text)].join(' ').toLowerCase();
+    const q = ui.q.toLowerCase();
+    const hay = [card.title, card.notes, card.tags.join(' '), ...ownersOf(card).map(p => p.name), 'T-' + card.num, ...card.checklist.map(i => i.text)].join(' ').toLowerCase();
     if (!hay.includes(q)) return false;
   }
   return true;
@@ -601,11 +604,11 @@ function renderStrip() {
     ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '') + calChip();
 }
 function cardHtml(c) {
-  const p = person(c.owner), ds = dueState(c), done = doneIds().has(c.columnId);
+  const os = ownersOf(c), ds = dueState(c), done = doneIds().has(c.columnId);
   const ck = c.checklist.length ? `<span class="ck ${c.checklist.every(i => i.done) ? 'full' : ''}">☑ ${c.checklist.filter(i => i.done).length}/${c.checklist.length}</span>` : '';
   const due = c.due ? `<span class="due ${ds === 'overdue' ? 'overdue' : ds === 'soon' ? 'soon' : ''}" title="Due date">${ds === 'overdue' ? 'Overdue · ' : ''}${fmtDay(c.due)}${c.time ? ' · ' + c.time : ''}</span>` : '';
   const tags = c.tags.map(t => `<span class="tag">${esc(t)}</span>`).join('');
-  const av = p ? `<span class="av" style="background:${esc(p.color)}" title="${esc(p.name)}">${esc(initials(p.name))}</span>` : '';
+  const av = os.length ? `<span class="avs" title="${esc(os.map(p => p.name).join(', '))}">${os.slice(0, 3).map(p => `<span class="av" style="background:${esc(p.color)}">${esc(initials(p.name))}</span>`).join('')}${os.length > 3 ? `<span class="av" style="background:var(--muted)">+${os.length - 3}</span>` : ''}</span>` : '';
   return `<article class="card p-${c.priority}${done ? ' done' : ''}" data-id="${c.id}" tabindex="0" aria-label="${esc(c.title)}">
     <div class="card-top"><span class="tkt">T-${String(c.num).padStart(3, '0')}</span>${c.example ? '<span class="ex">Example</span>' : ''}
     <button class="grip" type="button" aria-label="Drag to move" title="Drag to move">⠿</button></div>
@@ -796,7 +799,7 @@ function importLocal() {
     colMap[c.id] = t.id;
   });
   const cards = l.cards.filter(c => !c.example && (c.projectId || l.projects[0].id) === lp.id).sort((a, b) => a.num - b.num);
-  cards.forEach(c => { const col = colMap[c.columnId] || P().columns[0].id; state.cards.push({ ...c, id: uid(), projectId: tp.id, num: P().nextNum++, columnId: col, owner: pMap[c.owner] || '', order: nextOrder(col) }); });
+  cards.forEach(c => { const col = colMap[c.columnId] || P().columns[0].id; state.cards.push({ ...c, id: uid(), projectId: tp.id, num: P().nextNum++, columnId: col, owner: pMap[c.owner] || '', owners: (Array.isArray(c.owners) ? c.owners : c.owner ? [c.owner] : []).map(id => pMap[id]).filter(Boolean), order: nextOrder(col) }); });
   total += cards.length;
   });
   ui.project = keep;
@@ -839,17 +842,20 @@ $('#clearExamples').addEventListener('click', () => { const ex = new Set(pc().fi
 
 /* ---- card editor ---- */
 const dlg = $('#cardDlg');
-let editing = null, draftList = [], delArmed = false;
+let editing = null, draftList = [], draftOwners = [], delArmed = false;
+function renderOwners() {
+  $('#cOwners').innerHTML = state.people.map(p => `<button type="button" class="tagp" data-owner="${p.id}" aria-pressed="${draftOwners.includes(p.id)}">${esc(p.name)}</button>`).join('') || '<span class="hint">Add people in Board settings.</span>';
+}
+$('#cOwners').addEventListener('click', e => { const b = e.target.closest('[data-owner]'); if (!b) return; const id = b.dataset.owner; draftOwners = draftOwners.includes(id) ? draftOwners.filter(x => x !== id) : [...draftOwners, id]; renderOwners(); updateShare(); });
 function openCard(id, colId) {
   const c = id ? state.cards.find(x => x.id === id) : null;
   editing = c ? c.id : null;
   $('#cHead').textContent = c ? 'Edit card' : 'New card';
   $('#cTkt').textContent = c ? `T-${String(c.num).padStart(3, '0')}` : '';
   $('#cCol').innerHTML = P().columns.map(x => `<option value="${x.id}">${esc(x.name)}</option>`).join('');
-  $('#cOwner').innerHTML = `<option value="">Unassigned</option>` + state.people.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
   $('#cTitle').value = c?.title || '';
   $('#cCol').value = c?.columnId || colId || (P().columns[1] || P().columns[0]).id;
-  $('#cOwner').value = c ? (person(c.owner) ? c.owner : '') : (ui.person && ui.person !== '_none' ? ui.person : state.people[0]?.id || '');
+  draftOwners = c ? ownerIds(c) : [ui.person && ui.person !== '_none' ? ui.person : state.people[0]?.id].filter(Boolean); renderOwners();
   $('#cPriority').value = c?.priority || 'normal';
   $('#cDue').value = c?.due || '';
   $('#cTime').value = c?.due && c?.time || '';
@@ -889,12 +895,12 @@ function calEvent(c) {
   if (!c.due) return null;
   const proj = state.projects.find(p => p.id === cardProject(c)); if (!proj) return null;
   const col = proj.columns.find(x => x.id === c.columnId); if (!col || col.done) return null;
-  const owner = person(c.owner), end = new Date(c.due + 'T00:00:00'); end.setDate(end.getDate() + 1);
+  const emails = ownersOf(c).map(p => p.email).filter(Boolean), end = new Date(c.due + 'T00:00:00'); end.setDate(end.getDate() + 1);
   const steps = (c.checklist || []).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
   const when = c.time ? timed(c.due, c.time) : { start: { date: c.due, dateTime: null, timeZone: null }, end: { date: isoDay(end), dateTime: null, timeZone: null } };
   return { summary: c.title, ...when, status: 'confirmed',
     description: [`${proj.name} · ${col.name} · T-${String(c.num).padStart(3, '0')}`, c.notes, steps, location.origin + location.pathname].filter(Boolean).join('\n\n'),
-    attendees: owner && owner.email ? [{ email: owner.email }] : [] };
+    attendees: emails.map(email => ({ email })) };
 }
 function calChip() {
   if (!gcalAvailable()) return '';
@@ -1474,7 +1480,7 @@ $('#sLedClear').addEventListener('click', () => {
 /* Share a card: a prefilled Google Calendar event (inviting the owner) and an email to the owner. */
 const ymd = s => s.replace(/-/g, '');
 function updateShare() {
-  const title = $('#cTitle').value.trim() || 'Untitled card', due = $('#cDue').value, time = due ? $('#cTime').value : '', owner = person($('#cOwner').value);
+  const title = $('#cTitle').value.trim() || 'Untitled card', due = $('#cDue').value, time = due ? $('#cTime').value : '', os = draftOwners.map(person).filter(Boolean), emails = os.map(p => p.email).filter(Boolean), noEmail = os.filter(p => !p.email);
   const col = column($('#cCol').value), tkt = $('#cTkt').textContent;
   const steps = draftList.filter(i => i.text.trim()).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n');
   const details = [`${P().name}${col ? ' · ' + col.name : ''}${tkt ? ' · ' + tkt : ''}`, $('#cNotes').value.trim(), steps].filter(Boolean).join('\n\n');
@@ -1484,17 +1490,18 @@ function updateShare() {
     const hm = t => t.replace(':', '') + '00', [d2, t2] = time ? endHour(due, time) : [];
     const q = new URLSearchParams({ action: 'TEMPLATE', text: title, dates: time ? `${ymd(due)}T${hm(time)}/${ymd(d2)}T${hm(t2)}` : `${ymd(due)}/${ymd(isoDay(end))}`, details });
     if (time) q.set('ctz', TZ);
-    if (owner && owner.email) q.set('add', owner.email);
+    if (emails.length) q.set('add', emails.join(','));
     cal.href = 'https://calendar.google.com/calendar/render?' + q.toString(); cal.removeAttribute('aria-disabled');
   } else { cal.removeAttribute('href'); cal.setAttribute('aria-disabled', 'true'); }
-  if (owner && owner.email) {
+  if (emails.length) {
     const body = `${title}\n${due ? 'Due ' + fmtDay(due) + (time ? ' ' + time : '') + '\n' : ''}\n${details}`;
-    mail.href = `mailto:${encodeURIComponent(owner.email)}?subject=${encodeURIComponent((tkt ? `[${tkt}] ` : '') + title)}&body=${encodeURIComponent(body)}`; mail.removeAttribute('aria-disabled');
+    mail.href = `mailto:${emails.map(encodeURIComponent).join(',')}?subject=${encodeURIComponent((tkt ? `[${tkt}] ` : '') + title)}&body=${encodeURIComponent(body)}`; mail.removeAttribute('aria-disabled');
   } else { mail.removeAttribute('href'); mail.setAttribute('aria-disabled', 'true'); }
   const auto = gcalAvailable() && gcal.on;
   cal.hidden = auto;
-  if (auto) { $('#cShareHint').textContent = due ? 'This card syncs to your Google Calendar automatically' + (owner && owner.email ? ` and invites ${owner.email}.` : '.') : 'Set a due date to put this card on your Google Calendar.'; return; }
-  $('#cShareHint').textContent = !due && !(owner && owner.email) ? 'Set a due date and an owner with an email to use these.' : !due ? 'Set a due date to add it to Google Calendar.' : !(owner && owner.email) ? (owner ? `Add an email for ${owner.name} in Board settings to email them.` : 'Pick an owner to email them.') : `The calendar event invites ${owner.email}.`;
+  const missing = noEmail.length ? ` Add an email for ${noEmail.map(p => p.name).join(', ')} in Board settings to include ${noEmail.length > 1 ? 'them' : noEmail[0].name}.` : '';
+  if (auto) { $('#cShareHint').textContent = due ? 'This card syncs to your Google Calendar automatically' + (emails.length ? ` and invites ${emails.join(', ')}.` : '.') + missing : 'Set a due date to put this card on your Google Calendar.'; return; }
+  $('#cShareHint').textContent = (!due ? 'Set a due date to add it to Google Calendar.' : emails.length ? `The calendar event invites ${emails.join(', ')}.` : os.length ? '' : 'Pick owners to invite and email them.') + missing;
 }
 $('#cardForm').addEventListener('input', updateShare);
 $('#cardForm').addEventListener('change', updateShare);
@@ -1503,7 +1510,7 @@ $('#cardForm').addEventListener('submit', e => {
   const title = $('#cTitle').value.trim(); if (!title) return;
   const pending = $('#cNewItem').value.trim(); if (pending) { draftList.push({ text: pending, done: false }); $('#cNewItem').value = ''; }
   const colId = $('#cCol').value, now = Date.now();
-  const data = { title, columnId: colId, owner: $('#cOwner').value, priority: $('#cPriority').value, due: $('#cDue').value, time: $('#cDue').value ? $('#cTime').value : '',
+  const data = { title, columnId: colId, owners: draftOwners.filter(id => person(id)), owner: draftOwners.find(id => person(id)) || '', priority: $('#cPriority').value, due: $('#cDue').value, time: $('#cDue').value ? $('#cTime').value : '',
     tags: [...new Set($('#cTags').value.split(',').map(s => s.trim()).filter(Boolean))], notes: $('#cNotes').value.trim(),
     checklist: draftList.filter(i => i.text.trim()), updatedAt: now };
   if (editing) {
@@ -1654,7 +1661,7 @@ const onSetChange = e => {
 };
 const onSetClick = e => {
   const d = e.target.dataset;
-  if (d.prm) { const n = state.cards.filter(c => c.owner === d.prm).length; state.people = state.people.filter(p => p.id !== d.prm); state.cards.forEach(c => { if (c.owner === d.prm) c.owner = ''; }); commit(); renderAnySettings(); toast(n ? `Removed. ${n} cards are now unassigned` : 'Removed'); }
+  if (d.prm) { const n = state.cards.filter(c => ownerIds(c).includes(d.prm)).length; state.cards.forEach(c => { if (ownerIds(c).includes(d.prm)) { c.owners = ownerIds(c).filter(id => id !== d.prm); c.owner = c.owners[0] || ''; } }); state.people = state.people.filter(p => p.id !== d.prm); commit(); renderAnySettings(); toast(n ? `Removed from ${n} card${n === 1 ? '' : 's'}` : 'Removed'); }
   if (d.pjup || d.pjdown) { const i = +(d.pjup ?? d.pjdown), j = d.pjup ? i - 1 : i + 1; [state.projects[i], state.projects[j]] = [state.projects[j], state.projects[i]]; commit(); renderAnySettings(); }
   if (d.pjrm) {
     if (pjArmed !== d.pjrm) { pjArmed = d.pjrm; return renderAnySettings(); }
