@@ -451,6 +451,9 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   <div class="dlg">
     <div class="dlg-head"><h2>Board settings</h2><button type="button" class="btn ghost x" id="sClose" aria-label="Close">✕</button></div>
     <div class="dlg-body">
+      <div class="sect" id="sInstall"><h3>Install app</h3><p id="sInstallInfo"></p>
+        <div class="ed-row"><button class="btn small primary" id="sInstallBtn" hidden>Install app</button></div>
+      </div>
       <div class="sect"><h3>Projects</h3><p>Rename, reorder or delete projects. Deleting a project also deletes its cards.</p>
         <div id="sProjects" class="sect"></div>
         <div class="ed-row"><button class="btn small" id="sNewProject">+ New project</button></div>
@@ -1711,6 +1714,7 @@ function renderSettings() {
   $('#sCalInfo').textContent = gcal.kind === 'mix' ? 'Cards you own become tasks in your Google Calendar and Google Tasks. When a card has other owners with an email, they also get a calendar invite for it, because Google can\'t put a task into someone else\'s account. Finish stage ticks your task off and removes the invite. Connect on one device only.' : gcal.kind === 'tasks' ? 'Cards with a due date appear as tasks in your Google Calendar and Google Tasks. Moving a card to a Finish stage ticks the task off; clearing its due date or deleting the card removes it. Tasks have no time, so a card\'s time is added to its title. Connect on one device only.' : 'Cards with a due date appear as events on your Google Calendar, and the card\'s owners are invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don\'t get duplicate update emails.';
   $('#sCalState').textContent = !gcal.on ? 'Not connected on this device.' : gcalLive() ? 'Connected on this device.' : 'Connected, but Google needs you to sign in again.';
   $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() && !needsTasksScope() ? 'Stop syncing' : 'Reconnect';
+  renderInstall();
   $('#sAccount').hidden = !(backend && backend.signOut); if (backend && backend.email) $('#sEmail').textContent = `Signed in as ${backend.email}`;
   $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
 }
@@ -1791,6 +1795,29 @@ $('#sCalKind').addEventListener('change', e => { gcal.kind = e.target.value; gca
 $('#sCalBtn').addEventListener('click', () => {
   if (gcal.on && gcalLive() && !needsTasksScope()) { gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: gcal.kind, kindChosen: gcal.kindChosen, scope: '' }; saveG(); toast('Stopped syncing to Google Calendar. Existing events stay'); renderAnySettings(); renderStrip(); }
   else connectCal();
+});
+// Install as an app: Chrome/Edge fire beforeinstallprompt on the hosted site; we keep it for the settings button.
+let installEvt = null;
+const SITE = 'https://juanrivaldo.github.io/work-board/';
+const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+function renderInstall() {
+  const info = $('#sInstallInfo'), btn = $('#sInstallBtn');
+  btn.hidden = true;
+  if (isInstalled()) { info.textContent = 'This app is already installed on this device.'; return; }
+  if (!document.querySelector('link[rel="manifest"]')) { info.innerHTML = `To install, open <a href="${SITE}" target="_blank" rel="noopener">${SITE}</a> in Chrome or Edge and press Install app in settings there.`; return; }
+  if (installEvt) { info.textContent = 'Add Personal app to your home screen or desktop so it opens in its own window.'; btn.hidden = false; return; }
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent)) { info.textContent = 'On iPhone or iPad, tap the Share button in Safari, then Add to Home Screen.'; return; }
+  info.textContent = 'Your browser has not offered the install yet. Open the browser menu (⋮) and choose Install app or Add to Home screen.';
+}
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (sd.open) renderInstall(); });
+addEventListener('appinstalled', () => { installEvt = null; toast('Personal app installed'); if (sd.open) renderInstall(); });
+$('#sInstallBtn').addEventListener('click', async () => {
+  if (!installEvt) return renderInstall();
+  const e = installEvt; installEvt = null;
+  e.prompt();
+  let accepted = false; try { accepted = (await e.userChoice).outcome === 'accepted'; } catch {}
+  renderInstall();
+  if (accepted) $('#sInstallInfo').textContent = 'Installing. Look for Personal app on your home screen or desktop.';
 });
 $('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
 $('#skipImport').addEventListener('click', () => { try { localStorage.setItem(IMPKEY, '1'); } catch (e) {} $('#importNotice').hidden = true; });
