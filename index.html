@@ -1208,12 +1208,12 @@ function receiptCalc(r, people) {
   const share = {}; people.forEach(p => { share[p.id] = { items: sub[p.id], extra: tagged ? extra * sub[p.id] / tagged : 0 }; });
   return { share, itemsTotal, extra, ch, total: itemsTotal + extra, untagged };
 }
-/* Service and tax are each a % of the items (old bills may hold fixed amounts), other fees are fixed amounts.
+/* Service is a % of the items, tax is a % of items + service (old bills may hold fixed amounts), other fees are fixed amounts.
    Percentages are kept as percentages so the amounts follow the items as they change. */
 function receiptCharges(r, items) {
   if (items == null) items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
   const service = Number(r.servicePct) ? items * Number(r.servicePct) / 100 : Number(r.service) || 0;
-  const tax = Number(r.taxPct) ? items * Number(r.taxPct) / 100 : Number(r.tax) || 0;
+  const tax = Number(r.taxPct) ? (items + service) * Number(r.taxPct) / 100 : Number(r.tax) || 0;
   const fees = (r.fees || []).reduce((t, f) => t + (Number(f.amount) || 0), 0);
   return { items, service, tax, fees, discount: Number(r.discount) || 0 };
 }
@@ -1222,7 +1222,8 @@ const pctText = v => String(Math.round(Number(v) * 100) / 100);
 function pctShown(r, k) {
   if (Number(r[k + 'Pct'])) return pctText(r[k + 'Pct']);
   const items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
-  return Number(r[k]) && items ? pctText(Number(r[k]) / items * 100) : '';
+  const base = k === 'tax' ? items + receiptCharges(r, items).service : items;
+  return Number(r[k]) && base ? pctText(Number(r[k]) / base * 100) : '';
 }
 /* Everyone's share across all receipts, what they paid, and the fewest payments that settle it. */
 function billSettle(b) {
@@ -1361,7 +1362,7 @@ function touch(b, rerender) { b.updatedAt = Date.now(); b.currency = state.curre
 function chargeValue(r, field, v) {
   v = String(v).trim(); if (!v) return 0;
   if (v.endsWith('%')) { const pct = parseFloat(v.replace(',', '.')) || 0, items = r.items.reduce((t, i) => t + (Number(i.price) || 0), 0);
-    return roundMoney(items * pct / 100); }
+    return roundMoney((field === 'tax' ? items + (Number(r.service) || 0) : items) * pct / 100); }
   return Math.abs(parseAmount(v));
 }
 const findItem = (b, id) => { for (const r of b.receipts) { const it = r.items.find(i => i.id === id); if (it) return { r, it }; } return {}; };
