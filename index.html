@@ -488,7 +488,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <div class="sect" hidden><h3>Clear ledger</h3><p id="sLedInfo"></p>
         <div class="ed-row"><button class="btn small danger" id="sLedClear">Remove all entries</button></div></div>
       <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p id="sCalInfo"></p>
-        <label class="field"><span>Add cards to Google as</span><select class="inp" id="sCalKind" style="max-width:320px"><option value="mix">Tasks for me, invites for other owners</option><option value="tasks">Tasks only (just your Google account)</option><option value="events">Events (owners are invited)</option></select></label>
+        <label class="field"><span>Add cards to Google as</span><select class="inp" id="sCalKind" style="max-width:320px"><option value="events">Events (owners are invited)</option><option value="mix">Tasks for me, invites for other owners</option><option value="tasks">Tasks only (just your Google account)</option></select></label>
         <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
       <div class="sect"><h3>Start over</h3><p>Erases every project, card, person and stage.</p>
@@ -919,7 +919,7 @@ $('#cNewItem').addEventListener('keydown', e => { if (e.key === 'Enter') { e.pre
 const GKEY = 'workboard.gcal.v1';
 let gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: 'tasks', scope: '' }, gTimer = null, gBusy = false, gErr = '';
 try { Object.assign(gcal, JSON.parse(localStorage.getItem(GKEY) || '{}')); } catch (e) {}
-if (!gcal.tasks) gcal.tasks = {}; if (!gcal.kindChosen) gcal.kind = 'mix'; // until someone picks in settings
+if (!gcal.tasks) gcal.tasks = {}; if (!gcal.kindChosen) gcal.kind = 'events'; // Juan's choice; tasks and the mix stay available in settings
 /* Cards go to Google as Tasks (the default; they show in Google Calendar and Tasks for the connected account) or as
    calendar events that invite the owners. Switching removes what the other kind created. */
 const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks', CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
@@ -1004,7 +1004,7 @@ async function syncCal() {
       if (!r.ok) throw new Error(await taskErr(r));
       const j = await r.json(); gcal.tasks[cid] = { id: j.id || (have && have.id), sig }; saveG();
     }
-    for (const cid of Object.keys(gcal.tasks)) if (!wantT[cid]) {
+    if ((gcal.scope || '').includes(TASKS_SCOPE)) for (const cid of Object.keys(gcal.tasks)) if (!wantT[cid]) {
       const r = await taskApi('DELETE', `/${gcal.tasks[cid].id}`);
       if (r.ok || r.status === 404 || r.status === 410) { delete gcal.tasks[cid]; saveG(); } else throw new Error(await taskErr(r));
     }
