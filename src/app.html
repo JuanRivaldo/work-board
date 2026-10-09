@@ -47,6 +47,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 select.f { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); max-width: 40vw; }
 .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); cursor: pointer; white-space: nowrap; }
 .btn:hover { border-color: var(--muted); }
+.btn:disabled { opacity: .35; cursor: default; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 .btn.danger { color: var(--danger); }
 .btn.danger.armed { background: var(--danger); color: var(--surface); border-color: var(--danger); }
@@ -123,6 +124,11 @@ dialog::backdrop { background: rgba(10,15,13,.45); }
 .ci input[type=text]:hover, .ci input[type=text]:focus { border-color: var(--line); background: var(--bg); }
 .ci.done input[type=text] { text-decoration: line-through; color: var(--muted); }
 .ci .rm { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 2px 6px; }
+.hint { margin: 0; color: var(--muted); font-size: 13px; max-width: 62ch; }
+#sCols .ed-row { flex-wrap: wrap; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+#sCols .ed-row .inp[data-cname] { flex: 1 1 160px; }
+.stage-btn { gap: 6px; }
+.col-head h2 { cursor: pointer; }
 .stamp { font: 12px var(--mono); color: var(--muted); }
 
 .sect { display: grid; gap: 8px; }
@@ -149,6 +155,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <option value="">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option>
     </select>
     <button class="btn primary" id="newCard" title="New card (N)">+ New card</button>
+    <button class="btn stage-btn" id="openStages" title="Edit stages">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Stages</button>
     <button class="btn icon-btn" id="openSettings" aria-label="Board settings" title="Board settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--surface)"/><circle cx="15" cy="12" r="2" fill="var(--surface)"/><circle cx="7" cy="18" r="2" fill="var(--surface)"/></svg>
     </button>
@@ -171,7 +179,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
     <div class="dlg-body">
       <label class="field"><span>Title</span><input id="cTitle" required maxlength="200" placeholder="What needs to happen?"></label>
       <div class="row">
-        <label class="field"><span>Column</span><select id="cCol"></select></label>
+        <label class="field"><span>Stage</span><select id="cCol"></select></label>
         <label class="field"><span>Owner</span><select id="cOwner"></select></label>
       </div>
       <div class="row">
@@ -195,6 +203,18 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   </form>
 </dialog>
 
+<dialog id="stageDlg">
+  <div class="dlg">
+    <div class="dlg-head"><h2>Stages</h2><button type="button" class="btn ghost x" id="stClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <p class="hint">Each stage is a column on your board. Changes save as you type. Use the arrows to reorder. Set a limit to flag a stage that holds too many cards. Cards moved into a <b>Finish</b> stage get a completed date.</p>
+      <div id="sCols" class="sect"></div>
+      <div class="ed-row"><input class="inp" id="sNewCol" placeholder="New stage name, e.g. Review"><button class="btn small primary" id="sAddCol">Add stage</button></div>
+    </div>
+    <div class="dlg-foot"><span class="sp"></span><button type="button" class="btn primary" id="stDone">Done</button></div>
+  </div>
+</dialog>
+
 <dialog id="setDlg">
   <div class="dlg">
     <div class="dlg-head"><h2>Board settings</h2><button type="button" class="btn ghost x" id="sClose" aria-label="Close">✕</button></div>
@@ -204,9 +224,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <div id="sPeople" class="sect"></div>
         <div class="ed-row"><input class="inp" id="sNewPerson" placeholder="Name"><button class="btn small" id="sAddPerson">Add person</button></div>
       </div>
-      <div class="sect"><h3>Columns</h3><p>Set a limit to flag a column when it holds too many cards. Cards moved into a finish column get a completed date.</p>
-        <div id="sCols" class="sect"></div>
-        <div class="ed-row"><input class="inp" id="sNewCol" placeholder="Column name"><button class="btn small" id="sAddCol">Add column</button></div>
+      <div class="sect"><h3>Stages</h3><p>Rename, add, remove or reorder the stages on your board.</p>
+        <div class="ed-row"><button class="btn small" id="sOpenStages">Edit stages</button></div>
       </div>
       <div class="sect"><h3>Backup and move devices</h3><p id="sBackupNote"></p>
         <div class="ed-row" style="flex-wrap:wrap"><button class="btn small" id="sCopy">Copy backup</button><button class="btn small" id="sSaveFile" hidden>Save backup file</button><label class="btn small">Open backup file<input type="file" id="sFile" accept=".json,application/json" hidden></label></div>
@@ -340,7 +359,7 @@ function renderBoard() {
     const all = sorted(col.id), vis = all.filter(matches);
     const over = col.limit && all.length > col.limit;
     const count = (vis.length !== all.length ? `${vis.length} of ${all.length}` : `${all.length}`) + (col.limit ? ` / ${col.limit}` : '');
-    return `<section class="col" data-col="${col.id}"><div class="col-head"><h2>${esc(col.name)}</h2><span class="count ${over ? 'over' : ''}" title="${col.limit ? 'Cards / limit' : 'Cards'}">${count}</span>
+    return `<section class="col" data-col="${col.id}"><div class="col-head"><h2 data-stages="1" title="Edit stages">${esc(col.name)}</h2><span class="count ${over ? 'over' : ''}" title="${col.limit ? 'Cards / limit' : 'Cards'}">${count}</span>
       <button class="btn ghost add" data-add="${col.id}" aria-label="Add card to ${esc(col.name)}">+</button></div>
       <div class="list" data-col="${col.id}">${vis.map(cardHtml).join('') || `<div class="empty">${all.length ? 'No cards match the filters' : 'Drop cards here'}</div>`}</div></section>`;
   }).join('');
@@ -507,6 +526,7 @@ let drag = null, suppressClick = false;
 board.addEventListener('click', e => {
   if (suppressClick) return;
   const add = e.target.closest('[data-add]'); if (add) return openCard(null, add.dataset.add);
+  if (e.target.closest('[data-stages]')) return openStages();
   if (e.target.closest('.grip')) return;
   const card = e.target.closest('.card'); if (card) openCard(card.dataset.id);
 });
@@ -566,45 +586,55 @@ function finishDrag() {
 }
 
 /* ---- settings ---- */
-const sd = $('#setDlg');
+const sd = $('#setDlg'), stDlg = $('#stageDlg');
+function openStages() { renderStages(); if (sd.open) sd.close(); stDlg.showModal(); }
+$('#openStages').addEventListener('click', openStages);
+$('#sOpenStages').addEventListener('click', openStages);
+$('#stClose').addEventListener('click', () => stDlg.close());
+$('#stDone').addEventListener('click', () => stDlg.close());
 $('#openSettings').addEventListener('click', () => { renderSettings(); sd.showModal(); });
 $('#sClose').addEventListener('click', () => sd.close());
 sd.addEventListener('close', () => { resetArmed = false; $('#sReset').classList.remove('armed'); $('#sReset').textContent = 'Erase board'; });
+function renderAnySettings() { if (sd.open) renderSettings(); if (stDlg.open) renderStages(); }
 function renderSettings() {
   $('#sName').value = state.name;
   $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
-  $('#sCols').innerHTML = state.columns.map((c, i) => `<div class="ed-row"><input class="inp" id="cn-${c.id}" value="${esc(c.name)}" data-cname="${c.id}" aria-label="Column name">
-    <input class="inp" id="cl-${c.id}" type="number" min="0" style="flex:0 0 64px" value="${c.limit || ''}" placeholder="Limit" data-climit="${c.id}" aria-label="Card limit">
-    <label class="chk"><input type="checkbox" id="cd-${c.id}" data-cdone="${c.id}" ${c.done ? 'checked' : ''}>Finish</label>
-    <button class="btn small" data-cup="${i}" ${i ? '' : 'disabled'} aria-label="Move left">←</button><button class="btn small" data-cdown="${i}" ${i < state.columns.length - 1 ? '' : 'disabled'} aria-label="Move right">→</button>
-    <button class="btn small" data-crm="${c.id}" aria-label="Delete column">✕</button></div>`).join('');
+  renderStages();
   $('#sSaveFile').hidden = window.top !== window;
   $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
 }
+function renderStages() {
+  $('#sCols').innerHTML = state.columns.map((c, i) => `<div class="ed-row"><input class="inp" id="cn-${c.id}" value="${esc(c.name)}" data-cname="${c.id}" aria-label="Stage name">
+    <input class="inp" id="cl-${c.id}" type="number" min="0" style="flex:0 0 64px" value="${c.limit || ''}" placeholder="Limit" data-climit="${c.id}" aria-label="Card limit">
+    <label class="chk"><input type="checkbox" id="cd-${c.id}" data-cdone="${c.id}" ${c.done ? 'checked' : ''}>Finish</label>
+    <button class="btn small" data-cup="${i}" ${i ? '' : 'disabled'} aria-label="Move up">↑</button><button class="btn small" data-cdown="${i}" ${i < state.columns.length - 1 ? '' : 'disabled'} aria-label="Move down">↓</button>
+    <button class="btn small" data-crm="${c.id}" aria-label="Delete stage">✕</button></div>`).join('');
+}
 $('#sName').addEventListener('change', e => { state.name = e.target.value.trim() || 'Work Board'; commit(); });
-$('#sAddPerson').addEventListener('click', () => { const n = $('#sNewPerson').value.trim(); if (!n) return; state.people.push({ id: uid(), name: n, color: COLORS[state.people.length % COLORS.length] }); $('#sNewPerson').value = ''; commit(); renderSettings(); toast(`Added ${n}`); });
+$('#sAddPerson').addEventListener('click', () => { const n = $('#sNewPerson').value.trim(); if (!n) return; state.people.push({ id: uid(), name: n, color: COLORS[state.people.length % COLORS.length] }); $('#sNewPerson').value = ''; commit(); renderAnySettings(); toast(`Added ${n}`); });
 $('#sNewPerson').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddPerson').click(); });
-$('#sAddCol').addEventListener('click', () => { const n = $('#sNewCol').value.trim(); if (!n) return; const d = state.columns.findIndex(c => c.done); state.columns.splice(d < 0 ? state.columns.length : d, 0, { id: uid(), name: n }); $('#sNewCol').value = ''; commit(); renderSettings(); });
+$('#sAddCol').addEventListener('click', () => { const n = $('#sNewCol').value.trim(); if (!n) return; const d = state.columns.findIndex(c => c.done); state.columns.splice(d < 0 ? state.columns.length : d, 0, { id: uid(), name: n }); $('#sNewCol').value = ''; commit(); renderAnySettings(); });
 $('#sNewCol').addEventListener('keydown', e => { if (e.key === 'Enter') $('#sAddCol').click(); });
-sd.addEventListener('change', e => {
+const onSetChange = e => {
   const t = e.target, d = t.dataset;
   if (d.pname) { const p = person(d.pname); p.name = t.value.trim() || p.name; commit(); }
   else if (d.pcolor) { person(d.pcolor).color = t.value; commit(); }
   else if (d.cname) { const c = column(d.cname); c.name = t.value.trim() || c.name; commit(); }
   else if (d.climit) { const v = parseInt(t.value, 10); column(d.climit).limit = v > 0 ? v : 0; commit(); }
   else if (d.cdone) { column(d.cdone).done = t.checked; state.cards.forEach(c => { if (c.columnId === d.cdone) { if (t.checked) c.doneAt = c.doneAt || Date.now(); else delete c.doneAt; } }); commit(); }
-});
-sd.addEventListener('click', e => {
+};
+const onSetClick = e => {
   const d = e.target.dataset;
-  if (d.prm) { const n = state.cards.filter(c => c.owner === d.prm).length; state.people = state.people.filter(p => p.id !== d.prm); state.cards.forEach(c => { if (c.owner === d.prm) c.owner = ''; }); commit(); renderSettings(); toast(n ? `Removed. ${n} cards are now unassigned` : 'Removed'); }
-  if (d.cup || d.cdown) { const i = +(d.cup ?? d.cdown), j = d.cup ? i - 1 : i + 1; [state.columns[i], state.columns[j]] = [state.columns[j], state.columns[i]]; commit(); renderSettings(); }
+  if (d.prm) { const n = state.cards.filter(c => c.owner === d.prm).length; state.people = state.people.filter(p => p.id !== d.prm); state.cards.forEach(c => { if (c.owner === d.prm) c.owner = ''; }); commit(); renderAnySettings(); toast(n ? `Removed. ${n} cards are now unassigned` : 'Removed'); }
+  if (d.cup || d.cdown) { const i = +(d.cup ?? d.cdown), j = d.cup ? i - 1 : i + 1; [state.columns[i], state.columns[j]] = [state.columns[j], state.columns[i]]; commit(); renderAnySettings(); }
   if (d.crm) {
-    if (state.columns.length < 2) return toast('A board needs at least one column');
+    if (state.columns.length < 2) return toast('A board needs at least one stage');
     const n = state.cards.filter(c => c.columnId === d.crm).length;
-    if (n) return toast(`Move its ${n} cards out first`);
-    state.columns = state.columns.filter(c => c.id !== d.crm); commit(); renderSettings();
+    if (n) return toast(`Move its ${n} cards to another stage first`);
+    state.columns = state.columns.filter(c => c.id !== d.crm); commit(); renderAnySettings();
   }
-});
+};
+[sd, stDlg].forEach(dl => { dl.addEventListener("change", onSetChange); dl.addEventListener("click", onSetClick); });
 const backupText = () => JSON.stringify({ ...state, exportedAt: new Date().toISOString() }, null, 1);
 $('#sCopy').addEventListener('click', () => {
   const txt = backupText();
@@ -617,7 +647,7 @@ $('#sSaveFile').addEventListener('click', () => {
 function restore(text) {
   let d; try { d = JSON.parse(text); } catch (e) { return toast('That backup is not valid. Paste the whole text you copied'); }
   if (!valid(d)) return toast('That text is not a work board backup');
-  delete d.exportedAt; state = d; state.nextNum = Math.max(state.nextNum || 1, ...state.cards.map(c => c.num + 1)); commit(); renderSettings(); $('#sPaste').value = ''; toast(`Restored ${state.cards.length} cards`);
+  delete d.exportedAt; state = d; state.nextNum = Math.max(state.nextNum || 1, ...state.cards.map(c => c.num + 1)); commit(); renderAnySettings(); $('#sPaste').value = ''; toast(`Restored ${state.cards.length} cards`);
 }
 $('#sRestore').addEventListener('click', () => { const t = $('#sPaste').value.trim(); if (t) restore(t); else toast('Paste a backup into the box first'); });
 $('#sFile').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(restore); e.target.value = ''; });
@@ -627,7 +657,7 @@ $('#sReset').addEventListener('click', () => {
   if (!resetArmed) { resetArmed = true; b.classList.add('armed'); b.textContent = 'Click again to erase everything'; return; }
   const me = state.people[0] || { id: uid(), name: 'Juan', color: COLORS[0] };
   state = { version: 1, name: state.name, people: [me], columns: [{ id: uid(), name: 'To do' }, { id: uid(), name: 'In progress' }, { id: uid(), name: 'Done', done: true }], cards: [], nextNum: 1 };
-  resetArmed = false; b.classList.remove('armed'); b.textContent = 'Erase board'; commit(); renderSettings(); toast('Board erased');
+  resetArmed = false; b.classList.remove('armed'); b.textContent = 'Erase board'; commit(); renderAnySettings(); toast('Board erased');
 });
 
 window.addEventListener('storage', e => { if (mode === 'local' && e.key === KEY) { state = load(); render(); } });
