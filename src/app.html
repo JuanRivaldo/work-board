@@ -593,6 +593,7 @@ $('#strip').addEventListener('click', e => {
   if (b.dataset.due) ui.due = ui.due === b.dataset.due ? '' : b.dataset.due;
   if (b.dataset.pri) ui.priority = ui.priority === b.dataset.pri ? '' : b.dataset.pri;
   if (b.dataset.cal) return connectCal();
+  if (b.dataset.calerr) { $('#toast').classList.add('long'); toast(gErr + ' (tap again to retry)'); clearTimeout(toastT); toastT = setTimeout(() => { $('#toast').hidden = true; $('#toast').classList.remove('long'); }, 9000); gErr = ''; return syncCal(); }
   if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project }; $('#q').value = ''; }
   saveUi(); render();
 });
@@ -654,13 +655,14 @@ function calChip() {
   if (!gcalAvailable()) return '';
   if (!gcal.on) return `<button class="chip" data-cal="1">Connect Google Calendar</button>`;
   if (!gcalLive()) return `<button class="chip soon" data-cal="1"><b>!</b> Reconnect Google Calendar</button>`;
-  return `<span class="chip static" title="${esc(gErr)}">${gErr ? '<b>!</b> Calendar sync failed' : gBusy ? 'Updating calendar…' : 'Calendar synced'}</span>`;
+  if (gErr) return `<button class="chip soon" data-calerr="1" title="${esc(gErr)}"><b>!</b> Calendar sync failed · details</button>`;
+  return `<span class="chip static">${gBusy ? 'Updating calendar…' : 'Calendar synced'}</span>`;
 }
 function connectCal() {
   const g = window.google && window.google.accounts && window.google.accounts.oauth2;
   if (!g) return toast('Google sign-in is still loading. Try again in a moment');
   g.initTokenClient({ client_id: window.WB_SUPA.googleClientId, scope: 'https://www.googleapis.com/auth/calendar.events', callback: r => {
-    if (!r || r.error || !r.access_token) { toast('Google Calendar was not connected'); return; }
+    if (!r || r.error || !r.access_token) { toast('Google Calendar was not connected' + (r && r.error ? ` (${r.error}${r.error_description ? ': ' + r.error_description : ''})` : '')); return; }
     gcal.token = r.access_token; gcal.exp = Date.now() + ((r.expires_in || 3600) - 60) * 1000; gcal.on = true; gErr = ''; saveG();
     toast('Google Calendar connected'); renderStrip(); renderAnySettings(); syncCal();
   } }).requestAccessToken({ prompt: gcal.on ? '' : 'consent' });
@@ -671,6 +673,7 @@ async function calApi(method, path, body) {
   if (r.status === 401) { gcal.token = null; saveG(); throw { auth: true }; }
   return r;
 }
+async function calErr(r) { let m = ''; try { const j = await r.json(); m = (j.error && j.error.message) || ''; } catch (e) {} return `Google Calendar error ${r.status}${m ? ': ' + m : ''}`; }
 async function syncCal() {
   if (gBusy || !gcalLive()) { if (!gcalLive()) renderStrip(); return; }
   gBusy = true; renderStrip();
@@ -680,15 +683,15 @@ async function syncCal() {
       const sig = JSON.stringify(ev); if (gcal.sigs[id] === sig) continue;
       let r = await calApi('PATCH', `/${id}?sendUpdates=all`, ev);
       if (r.status === 404) r = await calApi('POST', '?sendUpdates=all', { ...ev, id });
-      if (!r.ok) throw new Error(`Google Calendar answered ${r.status}`);
+      if (!r.ok) throw new Error(await calErr(r));
       gcal.sigs[id] = sig; saveG();
     }
     for (const id of Object.keys(gcal.sigs)) if (!want[id]) {
       const r = await calApi('DELETE', `/${id}?sendUpdates=all`);
-      if (r.ok || r.status === 404 || r.status === 410) { delete gcal.sigs[id]; saveG(); } else throw new Error(`Google Calendar answered ${r.status}`);
+      if (r.ok || r.status === 404 || r.status === 410) { delete gcal.sigs[id]; saveG(); } else throw new Error(await calErr(r));
     }
     gErr = '';
-  } catch (e) { gErr = e && e.auth ? '' : String((e && e.message) || e); }
+  } catch (e) { gErr = e && e.auth ? '' : String((e && e.message) || e); if (gErr) toast(gErr); }
   gBusy = false; renderStrip();
 }
 
