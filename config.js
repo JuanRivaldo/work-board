@@ -4,5 +4,5 @@ window.WB_SUPA = {
   url: 'https://upsfyasanpsnjwjjigsh.supabase.co',
   key: 'sb_publishable_9Xs2wI-wHMybw2kNv1s96w_dckruvWY',
   // Google OAuth client ID (public) for Google Calendar sync. Empty turns the feature off.
-  googleClientId: ''
+  googleClientId: '483353877564-rtb6rsd4rs5u1oiuhd7jvsi36saktojl.apps.googleusercontent.com'
 };
