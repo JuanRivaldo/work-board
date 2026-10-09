@@ -487,7 +487,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <option value="EUR">Euro (€)</option><option value="GBP">British pound (£)</option><option value="AUD">Australian dollar (A$)</option><option value="JPY">Japanese yen (¥)</option></select></div></div>
       <div class="sect" hidden><h3>Clear ledger</h3><p id="sLedInfo"></p>
         <div class="ed-row"><button class="btn small danger" id="sLedClear">Remove all entries</button></div></div>
-      <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p>Cards with a due date appear as all-day events on your Google Calendar, and the card's owners are invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don't get duplicate update emails.</p>
+      <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p id="sCalInfo"></p>
+        <label class="field"><span>Add cards to Google as</span><select class="inp" id="sCalKind" style="max-width:320px"><option value="tasks">Tasks (only on your Google account)</option><option value="events">Events (owners are invited)</option></select></label>
         <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
       <div class="sect"><h3>Start over</h3><p>Erases every project, card, person and stage.</p>
@@ -916,8 +917,13 @@ $('#cNewItem').addEventListener('keydown', e => { if (e.key === 'Enter') { e.pre
 /* ---- Google Calendar sync (hosted site only). Each card with a due date is one all-day event on the
    connected person's primary calendar; the event id is derived from the card id, so any update is idempotent. ---- */
 const GKEY = 'workboard.gcal.v1';
-let gcal = { on: false, token: null, exp: 0, sigs: {} }, gTimer = null, gBusy = false, gErr = '';
+let gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: 'tasks', scope: '' }, gTimer = null, gBusy = false, gErr = '';
 try { Object.assign(gcal, JSON.parse(localStorage.getItem(GKEY) || '{}')); } catch (e) {}
+if (!gcal.tasks) gcal.tasks = {}; if (!gcal.kind) gcal.kind = 'tasks';
+/* Cards go to Google as Tasks (the default; they show in Google Calendar and Tasks for the connected account) or as
+   calendar events that invite the owners. Switching removes what the other kind created. */
+const TASKS_SCOPE = 'https://www.googleapis.com/auth/tasks', CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const needsTasksScope = () => gcal.kind === 'tasks' && !(gcal.scope || '').includes(TASKS_SCOPE);
 function saveG() { try { localStorage.setItem(GKEY, JSON.stringify(gcal)); } catch (e) {} }
 function gcalAvailable() { return !!(window.WB_SUPA && window.WB_SUPA.googleClientId) && window.top === window; }
 const gcalLive = () => !!gcal.token && Date.now() < gcal.exp;
@@ -941,6 +947,7 @@ function calEvent(c) {
 function calChip() {
   if (!gcalAvailable()) return '';
   if (!gcal.on) return `<button class="chip" data-cal="1">Connect Google Calendar</button>`;
+  if (needsTasksScope()) return `<button class="chip soon" data-cal="1"><b>!</b> Reconnect Google to add tasks</button>`;
   if (!gcalLive()) return `<button class="chip soon" data-cal="1"><b>!</b> Reconnect Google Calendar</button>`;
   if (gErr) return `<button class="chip soon" data-calerr="1" title="${esc(gErr)}"><b>!</b> Calendar sync failed · details</button>`;
   return `<span class="chip static">${gBusy ? 'Updating calendar…' : 'Calendar synced'}</span>`;
@@ -948,11 +955,11 @@ function calChip() {
 function connectCal() {
   const g = window.google && window.google.accounts && window.google.accounts.oauth2;
   if (!g) return toast('Google sign-in is still loading. Try again in a moment');
-  g.initTokenClient({ client_id: window.WB_SUPA.googleClientId, scope: 'https://www.googleapis.com/auth/calendar.events', callback: r => {
+  g.initTokenClient({ client_id: window.WB_SUPA.googleClientId, scope: `${CAL_SCOPE} ${TASKS_SCOPE}`, callback: r => {
     if (!r || r.error || !r.access_token) { toast('Google Calendar was not connected' + (r && r.error ? ` (${r.error}${r.error_description ? ': ' + r.error_description : ''})` : '')); return; }
-    gcal.token = r.access_token; gcal.exp = Date.now() + ((r.expires_in || 3600) - 60) * 1000; gcal.on = true; gErr = ''; saveG();
+    gcal.token = r.access_token; gcal.exp = Date.now() + ((r.expires_in || 3600) - 60) * 1000; gcal.on = true; gcal.scope = r.scope || ''; gErr = ''; saveG();
     toast('Google Calendar connected'); renderStrip(); renderAnySettings(); syncCal();
-  } }).requestAccessToken({ prompt: gcal.on ? '' : 'consent' });
+  } }).requestAccessToken({ prompt: gcal.on && !needsTasksScope() ? '' : 'consent' });
 }
 function scheduleCal() { if (!gcal.on || !gcalAvailable() || mode === 'loading' || mode === 'guest') return; clearTimeout(gTimer); gTimer = setTimeout(syncCal, 1200); }
 async function calApi(method, path, body) {
@@ -961,11 +968,41 @@ async function calApi(method, path, body) {
   return r;
 }
 async function calErr(r) { let m = ''; try { const j = await r.json(); m = (j.error && j.error.message) || ''; } catch (e) {} return `Google Calendar error ${r.status}${m ? ': ' + m : ''}`; }
+function calTask(c) {
+  if (!c.due) return null;
+  const proj = state.projects.find(p => p.id === cardProject(c)); if (!proj) return null;
+  const col = proj.columns.find(x => x.id === c.columnId); if (!col) return null;
+  const os = ownersOf(c), steps = (c.checklist || []).map(i => `${i.done ? '[x]' : '[ ]'} ${i.text}`).join('\n'), last = (c.comments || [])[(c.comments || []).length - 1];
+  return { title: (c.time ? c.time + ' ' : '') + c.title, due: `${c.due}T00:00:00.000Z`, status: col.done ? 'completed' : 'needsAction', ...(col.done ? {} : { completed: null }),
+    notes: [`${proj.name} · ${col.name} · T-${String(c.num).padStart(3, '0')}${os.length ? ' · ' + os.map(p => p.name).join(', ') : ''}`, c.notes, steps, last ? 'Latest: ' + last.text : '', location.origin + location.pathname].filter(Boolean).join('\n\n').slice(0, 8000) };
+}
+async function taskApi(method, path, body) {
+  const r = await fetch('https://tasks.googleapis.com/tasks/v1/lists/@default/tasks' + path, { method, headers: { Authorization: 'Bearer ' + gcal.token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { gcal.token = null; saveG(); throw { auth: true }; }
+  return r;
+}
+async function taskErr(r) {
+  let m = ''; try { const j = await r.json(); m = (j.error && j.error.message) || ''; } catch (e) {}
+  if (r.status === 403 && /has not been used|is disabled|not enabled/i.test(m)) return 'Google Tasks is switched off for this app. In Google Cloud, open APIs & Services > Library, search "Google Tasks API" and press Enable, then try again.';
+  return `Google Tasks error ${r.status}${m ? ': ' + m : ''}`;
+}
 async function syncCal() {
-  if (gBusy || !gcalLive()) { if (!gcalLive()) renderStrip(); return; }
+  if (gBusy || !gcalLive() || needsTasksScope()) { renderStrip(); return; }
   gBusy = true; renderStrip();
   try {
-    const want = {}; state.cards.forEach(c => { const ev = calEvent(c); if (ev) want[evId(c)] = ev; });
+    const wantT = {}; if (gcal.kind === 'tasks') state.cards.forEach(c => { const t = calTask(c); if (t) wantT[c.id] = t; });
+    for (const [cid, t] of Object.entries(wantT)) {
+      const sig = JSON.stringify(t), have = gcal.tasks[cid]; if (have && have.sig === sig) continue;
+      let r = have ? await taskApi('PATCH', `/${have.id}`, t) : null;
+      if (!r || r.status === 404) { const { completed, ...fresh } = t; r = await taskApi('POST', '', fresh); }
+      if (!r.ok) throw new Error(await taskErr(r));
+      const j = await r.json(); gcal.tasks[cid] = { id: j.id || (have && have.id), sig }; saveG();
+    }
+    for (const cid of Object.keys(gcal.tasks)) if (!wantT[cid]) {
+      const r = await taskApi('DELETE', `/${gcal.tasks[cid].id}`);
+      if (r.ok || r.status === 404 || r.status === 410) { delete gcal.tasks[cid]; saveG(); } else throw new Error(await taskErr(r));
+    }
+    const want = {}; if (gcal.kind === 'events') state.cards.forEach(c => { const ev = calEvent(c); if (ev) want[evId(c)] = ev; });
     for (const [id, ev] of Object.entries(want)) {
       const sig = JSON.stringify(ev); if (gcal.sigs[id] === sig) continue;
       let r = await calApi('PATCH', `/${id}?sendUpdates=all`, ev);
@@ -1545,6 +1582,7 @@ function updateShare() {
   const auto = gcalAvailable() && gcal.on;
   cal.hidden = auto;
   const missing = noEmail.length ? ` Add an email for ${noEmail.map(p => p.name).join(', ')} in Board settings to include ${noEmail.length > 1 ? 'them' : noEmail[0].name}.` : '';
+  if (auto && gcal.kind === 'tasks') { $('#cShareHint').textContent = due ? 'This card shows as a task in your Google Calendar and Google Tasks.' : 'Set a due date to add it to Google Tasks.'; return; }
   if (auto) { $('#cShareHint').textContent = due ? 'This card syncs to your Google Calendar automatically' + (emails.length ? ` and invites ${emails.join(', ')}.` : '.') + missing : 'Set a due date to put this card on your Google Calendar.'; return; }
   $('#cShareHint').textContent = (!due ? 'Set a due date to add it to Google Calendar.' : emails.length ? `The calendar event invites ${emails.join(', ')}.` : os.length ? '' : 'Pick owners to invite and email them.') + missing;
 }
@@ -1677,8 +1715,10 @@ function renderSettings() {
   const nl = pl().length; $('#sLedInfo').textContent = nl ? `Removes all ${nl} ledger entries in ${P().name}. This can't be undone, so copy them as CSV first if you might need them.` : `${P().name} has no ledger entries.`;
   $('#sLedClear').disabled = !nl; ledArmed = false; $('#sLedClear').classList.remove('armed'); $('#sLedClear').textContent = 'Remove all entries';
   $('#sCal').hidden = !gcalAvailable();
+  $('#sCalKind').value = gcal.kind;
+  $('#sCalInfo').textContent = gcal.kind === 'tasks' ? 'Cards with a due date appear as tasks in your Google Calendar and Google Tasks. Moving a card to a Finish stage ticks the task off; clearing its due date or deleting the card removes it. Tasks have no time, so a card\'s time is added to its title. Connect on one device only.' : 'Cards with a due date appear as events on your Google Calendar, and the card\'s owners are invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don\'t get duplicate update emails.';
   $('#sCalState').textContent = !gcal.on ? 'Not connected on this device.' : gcalLive() ? 'Connected on this device.' : 'Connected, but Google needs you to sign in again.';
-  $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() ? 'Stop syncing' : 'Reconnect';
+  $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() && !needsTasksScope() ? 'Stop syncing' : 'Reconnect';
   $('#sAccount').hidden = !(backend && backend.signOut); if (backend && backend.email) $('#sEmail').textContent = `Signed in as ${backend.email}`;
   $('#sBackupNote').textContent = mode === 'cloud' ? 'Your board is saved online and stays in sync on every device where you open this page. Copy a backup to keep your own copy, or paste one to replace the board.' : 'Your board is saved in this browser only. To move it to another device, copy the backup here and paste it into the board on the other device.';
 }
@@ -1755,8 +1795,9 @@ $('#sReset').addEventListener('click', () => {
 
 window.addEventListener('storage', e => { if (mode === 'local' && e.key === KEY) { state = load(); render(); } });
 $('#doImport').addEventListener('click', importLocal);
+$('#sCalKind').addEventListener('change', e => { gcal.kind = e.target.value; saveG(); renderAnySettings(); renderStrip(); if (needsTasksScope()) connectCal(); else syncCal(); });
 $('#sCalBtn').addEventListener('click', () => {
-  if (gcal.on && gcalLive()) { gcal = { on: false, token: null, exp: 0, sigs: {} }; saveG(); toast('Stopped syncing to Google Calendar. Existing events stay'); renderAnySettings(); renderStrip(); }
+  if (gcal.on && gcalLive() && !needsTasksScope()) { gcal = { on: false, token: null, exp: 0, sigs: {}, tasks: {}, kind: gcal.kind, scope: '' }; saveG(); toast('Stopped syncing to Google Calendar. Existing events stay'); renderAnySettings(); renderStrip(); }
   else connectCal();
 });
 $('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
