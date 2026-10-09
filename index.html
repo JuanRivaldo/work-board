@@ -207,6 +207,10 @@ table.led tr.opening td { color: var(--muted); font-style: italic; }
 .cat-row .top span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .bar { height: 6px; border-radius: 3px; background: var(--col); overflow: hidden; }
 .bar i { display: block; height: 100%; background: var(--danger); border-radius: 3px; }
+.bar.in i { background: var(--ok); }
+.side-panels { display: grid; gap: 16px; min-width: 0; }
+.cat-row .net { font-size: 12px; color: var(--muted); }
+.cat-row .net b { font: 500 12px var(--mono); }
 .led-empty { padding: 28px 16px; text-align: center; color: var(--muted); }
 .kind { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .kind label { cursor: pointer; }
@@ -892,6 +896,11 @@ function renderLedger() {
   const closing = rows.length ? rows[rows.length - 1].bal : opening + 0;
   const cats = {}; rows.filter(r => r.e.kind !== 'in').forEach(r => { const c = r.e.category || 'Uncategorized'; cats[c] = (cats[c] || 0) + r.e.amount; });
   const catList = Object.entries(cats).sort((a, b) => b[1] - a[1]), top = catList.length ? catList[0][1] : 0;
+  /* Money in grouped by category, which is who put it in (Juan, Deva). With two or more, also show each one's
+     position after money out is split equally between them. */
+  const ins = {}; rows.filter(r => r.e.kind === 'in').forEach(r => { const c = r.e.category || 'Uncategorized'; ins[c] = (ins[c] || 0) + r.e.amount; });
+  const inList = Object.entries(ins).sort((a, b) => b[1] - a[1]), inTop = inList.length ? Math.max(...inList.map(x => Math.abs(x[1]))) : 0;
+  const share = inList.length > 1 ? tout / inList.length : 0;
   const card = id => state.cards.find(c => c.id === id);
   const period = m ? monthName(m) : 'All time';
   $('#ledger').innerHTML = `
@@ -912,7 +921,10 @@ function renderLedger() {
           <td class="num">${fmtMoney(bal)}</td></tr>`; }).join('')}
         ${m ? `<tr class="opening"><td class="date"></td><td>Balance brought forward</td><td class="col-in"></td><td class="col-out"></td><td class="amt"></td><td class="num">${fmtMoney(opening)}</td></tr>` : ''}
         </tbody></table></div>` : `<div class="led-empty">${all.length ? 'No entries in this month.' : 'No entries yet. Record money coming in or going out with <b>+ New entry</b>.'}</div>`}</section>
+      <div class="side-panels">
+      <section class="panel"><h3>Money in by person</h3><div class="cats">${inList.length ? inList.map(([c, v]) => `<div class="cat-row"><div class="top"><span>${esc(c)}</span><span>${fmtMoney(v)}</span></div><div class="bar in"><i style="width:${Math.max(3, Math.round(Math.abs(v) / inTop * 100))}%"></i></div>${share ? `<div class="net">After splitting money out equally: <b>${fmtMoney(v - share, true)}</b></div>` : ''}</div>`).join('') + (share ? `<p class="hint">Each share of money out: ${fmtMoney(share)}</p>` : '') : '<p class="hint">Money in is grouped by its category here. Use a person\'s name as the category, e.g. Juan or Deva.</p>'}</div></section>
       <section class="panel"><h3>Spending by category</h3><div class="cats">${catList.length ? catList.map(([c, v]) => `<div class="cat-row"><div class="top"><span>${esc(c)}</span><span>${fmtMoney(v)}</span></div><div class="bar"><i style="width:${Math.max(3, Math.round(v / top * 100))}%"></i></div></div>`).join('') : '<p class="hint">Money out will be grouped by category here.</p>'}</div></section>
+      </div>
     </div>`;
 }
 /* Left menu: open/closed is remembered per device. On phones it is a drawer that closes after picking a view. */
