@@ -337,6 +337,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 </div>
 </div>
 <main class="guest-wrap" id="guest" hidden></main>
+<input type="file" id="billFile" accept="image/*" hidden>
 
 <dialog id="cardDlg">
   <form class="dlg" id="cardForm" method="dialog">
@@ -713,6 +714,7 @@ async function start() {
 }
 /* Supabase: table items(board_id = the signed-in user, id = 'meta' | 'card:<id>', data jsonb) */
 const chk = r => { if (r.error) throw r.error; };
+const canon = v => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']' : v && typeof v === 'object' ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}' : JSON.stringify(v);
 async function startSupabase(cfg) {
   const sb = window.supabase.createClient(cfg.url, cfg.key);
   let { data: { session } } = await sb.auth.getSession();
@@ -744,6 +746,10 @@ async function startSupabase(cfg) {
     const led = row.id.startsWith('led:'), bill = row.id.startsWith('bill:');
     const key = row.id === 'meta' ? 'meta' : led ? 'L:' + row.id.slice(4) : bill ? 'B:' + row.id.slice(5) : row.id.slice(5);
     if (chains.has(key)) return; // our own write is still in flight
+    if (p.eventType !== 'DELETE' && p.new && p.new.data) {
+      const have = row.id === 'meta' ? synced.meta : (bill ? synced.bill : led ? synced.led : synced.cards).get(row.id.slice(row.id.indexOf(':') + 1));
+      if (have && canon(JSON.parse(have)) === canon(p.new.data)) return; // our own write coming back
+    }
     if (key === 'meta') { if (p.new && p.new.data) applyMeta(p.new.data); }
     else if (bill) { if (p.eventType === 'DELETE') removeBill(row.id.slice(5)); else applyBill(p.new.data); }
     else if (led) { if (p.eventType === 'DELETE') removeEntry(row.id.slice(4)); else applyEntry(p.new.data); }
@@ -1143,7 +1149,7 @@ function receiptHtml(b, r, n) {
   return `<section class="panel" data-rc="${r.id}"><div class="rc-head"><input class="inp" data-rf="name" value="${esc(r.name)}" aria-label="Bill name" maxlength="60">
       ${b.receipts.length > 1 ? `<button type="button" class="btn ghost small" data-rcrm="${r.id}">Remove</button>` : ''}</div>
     <div class="bill-body">
-      <div class="scan"><label class="btn">Upload bill photo<input type="file" data-scan="${r.id}" accept="image/*" hidden></label><span class="hint" data-scanstate="${r.id}">${esc(scanState[r.id] || '')}</span></div>
+      <div class="scan"><button type="button" class="btn" data-scanbtn="${r.id}">Upload bill photo</button><span class="hint" data-scanstate="${r.id}">${esc(scanState[r.id] || '')}</span></div>
       <div class="items">${r.items.map(it => `<div class="item${b.people.length && !(it.who || []).some(id => b.people.some(p => p.id === id)) ? ' untagged' : ''}" data-item="${it.id}">
         <input class="inp" data-f="qty" value="${esc(String(it.qty || 1))}" inputmode="numeric" aria-label="Quantity">
         <input class="inp" data-f="name" value="${esc(it.name)}" placeholder="Item" aria-label="Item">
@@ -1162,6 +1168,7 @@ function receiptHtml(b, r, n) {
     </div></section>`;
 }
 function renderBills() {
+  billFocusRender = false;
   const b = curBill();
   $('#billBack').hidden = !b; $('#newBill').hidden = !!b;
   if (!b) {
@@ -1240,6 +1247,7 @@ $('#bills').addEventListener('click', e => {
   const t = e.target.closest('button'); if (!t) return;
   if (t.dataset.bill) { ui.bill = t.dataset.bill; saveUi(); scanState = {}; return render(); }
   const b = curBill(); if (!b) return;
+  if (t.dataset.scanbtn) { scanFor = { bill: b.id, rc: t.dataset.scanbtn }; $('#billFile').value = ''; return $('#billFile').click(); }
   if (t.dataset.padd || t.id === 'bAddPerson') {
     const name = (t.dataset.padd || $('#bNewPerson').value).trim(); if (!name) return $('#bNewPerson').focus();
     if (b.people.some(p => p.name.toLowerCase() === name.toLowerCase())) return toast(`${name} is already on this split`);
@@ -1280,7 +1288,6 @@ $('#bills').addEventListener('change', e => {
   const b = curBill(); if (!b) return; const t = e.target, rcEl = t.closest('[data-rc]'), r = rcEl && b.receipts.find(x => x.id === rcEl.dataset.rc);
   if (t.id === 'bTitle') { b.title = t.value.trim() || 'Bill'; return touch(b); }
   if (t.id === 'bDate') { b.date = t.value || b.date; return touch(b); }
-  if (t.dataset.scan && t.files[0]) return scanBill(b, r, t.files[0]);
   if (!r) return;
   if (t.dataset.rf === 'name') { r.name = t.value.trim() || 'Bill'; return touch(b); }
   if (t.dataset.rf === 'payer') { r.payer = t.value; return touch(b); }
@@ -1289,7 +1296,17 @@ $('#bills').addEventListener('change', e => {
 });
 $('#bills').addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'bNewPerson') { e.preventDefault(); $('#bAddPerson').click(); } });
 /* Changes arriving from a guest while you are typing wait until you leave the field. */
-$('#bills').addEventListener('focusout', () => { if (billFocusRender) setTimeout(() => { if (billFocusRender && !billTyping()) { billFocusRender = false; render(); } }, 0); });
+let scanFor = null, billPointer = false;
+$('#billFile').addEventListener('change', e => {
+  const f = e.target.files[0], b = scanFor && state.bills.find(x => x.id === scanFor.bill), r = b && normBill(b).receipts.find(x => x.id === scanFor.rc);
+  if (f && r) scanBill(b, r, f);
+});
+/* A tap inside the split should never have its button swapped out underneath it, so a held-back update waits for focus to leave. */
+$('#bills').addEventListener('pointerdown', () => { billPointer = true; setTimeout(() => { billPointer = false; }, 600); });
+$('#bills').addEventListener('focusout', e => {
+  if (!billFocusRender || billPointer || (e.relatedTarget && e.relatedTarget.closest('#bills'))) return;
+  setTimeout(() => { if (billFocusRender && !billTyping() && !billPointer) render(); }, 0);
+});
 const billTyping = () => ui.view === 'bills' && document.activeElement && document.activeElement.closest('#bills') && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
 
 /* Guest page: someone opened a share link (#bill=<token>). They see only that split, pick or add their name and
@@ -1371,8 +1388,8 @@ async function scanBill(b, r, file) {
   setScanR('Getting the reader ready…');
   try {
     const T = await loadOcr();
-    const r = await T.recognize(file, 'eng', { logger: m => { if (m.status === 'recognizing text') setScanR(`Reading the bill… ${Math.round(m.progress * 100)}%`); } });
-    const found = parseReceipt(r.data.text);
+    const res = await T.recognize(file, 'eng', { logger: m => { if (m.status === 'recognizing text') setScanR(`Reading the bill… ${Math.round(m.progress * 100)}%`); } });
+    const found = parseReceipt(res.data.text);
     if (!found.items.length) { setScanR('No items found. Try a sharper, straight-on photo, or type the items in.'); return; }
     found.items.forEach(it => r.items.push({ id: uid(), qty: it.qty, name: it.name, price: it.price, who: [] }));
     ['service', 'tax', 'discount'].forEach(k => { if (found[k]) r[k] = found[k]; });
