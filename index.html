@@ -466,7 +466,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   <div class="dlg">
     <div class="dlg-head"><h2>Board settings</h2><button type="button" class="btn ghost x" id="sClose" aria-label="Close">✕</button></div>
     <div class="dlg-body">
-      <div class="sect" id="sInstall"><h3>Install app</h3><p id="sInstallInfo"></p>
+      <div class="sect" id="sInstall" hidden><h3>Install app</h3><p id="sInstallInfo"></p>
         <div class="ed-row"><button class="btn small primary" id="sInstallBtn" hidden>Install app</button></div>
       </div>
       <div class="sect"><h3>Projects</h3><p>Rename, reorder or delete projects. Deleting a project also deletes its cards.</p>
@@ -1815,24 +1815,31 @@ $('#sCalBtn').addEventListener('click', () => {
 let installEvt = null;
 const SITE = 'https://juanrivaldo.github.io/work-board/';
 const isInstalled = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isMobile = () => (navigator.userAgentData && navigator.userAgentData.mobile) || /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent);
+// Phones only: the section is hidden on computers.
 function renderInstall() {
   const info = $('#sInstallInfo'), btn = $('#sInstallBtn');
-  btn.hidden = true;
-  if (isInstalled()) { info.textContent = 'This app is already installed on this device.'; return; }
-  if (!document.querySelector('link[rel="manifest"]')) { info.innerHTML = `To install, open <a href="${SITE}" target="_blank" rel="noopener">${SITE}</a> in Chrome or Edge and press Install app in settings there.`; return; }
-  if (installEvt) { info.textContent = 'Add Personal app to your home screen or desktop so it opens in its own window.'; btn.hidden = false; return; }
-  if (/iphone|ipad|ipod/i.test(navigator.userAgent)) { info.textContent = 'On iPhone or iPad, tap the Share button in Safari, then Add to Home Screen.'; return; }
-  info.textContent = 'Your browser has not offered the install yet. Open the browser menu (⋮) and choose Install app or Add to Home screen.';
+  $('#sInstall').hidden = !isMobile();
+  btn.hidden = false;
+  if (isInstalled()) { info.textContent = 'This app is already installed on this phone.'; btn.hidden = true; return; }
+  info.textContent = 'Add Personal app to your home screen so it opens like a normal app.';
+}
+function installHelp() {
+  $('#sInstallInfo').textContent = isIOS()
+    ? 'In Safari, tap the Share button at the bottom, then Add to Home Screen.'
+    : 'Tap ⋮ at the top right of Chrome, then Add to Home screen (or Install app), then Install.';
 }
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvt = e; if (sd.open) renderInstall(); });
 addEventListener('appinstalled', () => { installEvt = null; toast('Personal app installed'); if (sd.open) renderInstall(); });
 $('#sInstallBtn').addEventListener('click', async () => {
-  if (!installEvt) return renderInstall();
+  if (!document.querySelector('link[rel="manifest"]')) { open(SITE, '_blank', 'noopener'); return; }
+  if (!installEvt) return installHelp();
   const e = installEvt; installEvt = null;
   e.prompt();
   let accepted = false; try { accepted = (await e.userChoice).outcome === 'accepted'; } catch {}
   renderInstall();
-  if (accepted) $('#sInstallInfo').textContent = 'Installing. Look for Personal app on your home screen or desktop.';
+  if (accepted) $('#sInstallInfo').textContent = 'Installing. Look for Personal app on your home screen.';
 });
 $('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
 $('#skipImport').addEventListener('click', () => { try { localStorage.setItem(IMPKEY, '1'); } catch (e) {} $('#importNotice').hidden = true; });
