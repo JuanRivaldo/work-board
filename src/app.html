@@ -140,6 +140,53 @@ dialog::backdrop { background: rgba(10,15,13,.45); }
 .share { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .share a { text-decoration: none; color: var(--ink); }
 .share a[aria-disabled="true"] { opacity: .4; pointer-events: none; }
+.views { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; padding: 2px; background: var(--surface); }
+.views button { border: 0; background: transparent; padding: 5px 12px; border-radius: 5px; cursor: pointer; font-weight: 500; color: var(--muted); }
+.views button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.ledger { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 24px; display: grid; gap: 16px; align-content: start; }
+.totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.total { background: var(--surface); border-radius: 8px; padding: 10px 14px; box-shadow: var(--shadow); min-width: 0; }
+.total .lbl { display: block; margin-bottom: 2px; }
+.total b { font: 600 20px/1.2 var(--mono); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.total.in b { color: var(--ok); } .total.out b { color: var(--danger); }
+.led-grid { display: grid; grid-template-columns: minmax(0, 2.2fr) minmax(220px, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 860px) { .led-grid { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); min-width: 0; }
+.panel h3 { margin: 0; padding: 12px 14px 8px; font: 600 15px var(--display); }
+.tbl-wrap { overflow-x: auto; }
+table.led { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.led th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.led td { padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.led tr[data-eid] { cursor: pointer; }
+table.led tr[data-eid]:hover td { background: var(--bg); }
+table.led .num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+table.led .date { font-family: var(--mono); white-space: nowrap; color: var(--muted); }
+table.led .in { color: var(--ok); } table.led .out { color: var(--danger); }
+table.led .sub { display: block; color: var(--muted); font-size: 12px; }
+table.led tr.opening td { color: var(--muted); font-style: italic; }
+.amt, .mob-date { display: none; }
+.total b { white-space: nowrap; overflow-wrap: normal; }
+@media (max-width: 600px) {
+  table.led .amt { display: table-cell; } .mob-date { display: inline; }
+  table.led .col-in, table.led .col-out, table.led .date { display: none; }
+  table.led td, table.led th { padding: 8px 10px; }
+  .totals { grid-template-columns: 1fr 1fr; } .total { padding: 8px 10px; } .total b { font-size: 15px; } .total .lbl { font-size: 10px; }
+}
+.cats { padding: 4px 14px 14px; display: grid; gap: 10px; }
+.cat-row { display: grid; gap: 4px; }
+.cat-row .top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.cat-row .top span:last-child { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.bar { height: 6px; border-radius: 3px; background: var(--col); overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--danger); border-radius: 3px; }
+.led-empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+.kind { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.kind label { cursor: pointer; }
+.kind input { position: absolute; opacity: 0; pointer-events: none; }
+.kind span { display: block; text-align: center; padding: 9px; border: 1px solid var(--line); border-radius: 6px; font-weight: 600; color: var(--muted); }
+.kind input:checked + span { border-color: currentColor; }
+#eKindOut:checked + span { color: var(--danger); background: var(--danger-soft); }
+#eKindIn:checked + span { color: var(--ok); background: var(--ok-soft); }
+.kind input:focus-visible + span { outline: 2px solid var(--accent); outline-offset: 2px; }
 .stamp { font: 12px var(--mono); color: var(--muted); }
 
 .sect { display: grid; gap: 8px; }
@@ -158,22 +205,26 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 
 <header class="top">
   <div class="brand"><h1 class="proj-wrap"><select id="projSel" class="proj" aria-label="Project"></select></h1><span class="sub" id="boardSub"></span></div>
+  <nav class="views" aria-label="View"><button type="button" data-view="board">Board</button><button type="button" data-view="ledger">Ledger</button></nav>
   <div class="tools">
-    <label class="search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <label class="search" data-board><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
       <input id="q" type="search" placeholder="Search cards" aria-label="Search cards"></label>
-    <select id="fPerson" class="f" aria-label="Filter by person"></select>
-    <select id="fPriority" class="f" aria-label="Filter by priority">
+    <select id="fPerson" class="f" aria-label="Filter by person" data-board></select>
+    <select id="fPriority" class="f" aria-label="Filter by priority" data-board>
       <option value="">Any priority</option><option value="urgent">Urgent</option><option value="high">High</option><option value="normal">Normal</option><option value="low">Low</option>
     </select>
-    <button class="btn primary" id="newCard" title="New card (N)">+ New card</button>
-    <button class="btn stage-btn" id="openStages" title="Edit stages">
+    <button class="btn primary" id="newCard" title="New card (N)" data-board>+ New card</button>
+    <select id="ledMonth" class="f" aria-label="Month" data-ledger></select>
+    <button class="btn" id="ledCsv" data-ledger>Copy as CSV</button>
+    <button class="btn primary" id="newEntry" title="New entry (N)" data-ledger>+ New entry</button>
+    <button class="btn stage-btn" id="openStages" title="Edit stages" data-board>
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Stages</button>
     <button class="btn icon-btn" id="openSettings" aria-label="Board settings" title="Board settings">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2" fill="var(--surface)"/><circle cx="15" cy="12" r="2" fill="var(--surface)"/><circle cx="7" cy="18" r="2" fill="var(--surface)"/></svg>
     </button>
   </div>
 </header>
-<div class="strip" id="strip"></div>
+<div class="strip" id="strip" data-board></div>
 <div class="notice" id="exampleNotice" hidden>
   <p>The cards marked <b>Example</b> show what the board can do. Add your own work, then clear them.</p>
   <button class="link" id="clearExamples">Remove example cards</button>
@@ -182,7 +233,8 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   <p><span id="importText"></span> Move them to your online board so they show on all your devices.</p>
   <button class="btn small primary" id="doImport">Move my cards</button><button class="link" id="skipImport">Not now</button>
 </div>
-<main class="board" id="board" aria-label="Board columns"></main>
+<main class="board" id="board" aria-label="Board columns" data-board></main>
+<main class="ledger" id="ledger" aria-label="Ledger" data-ledger hidden></main>
 
 <dialog id="cardDlg">
   <form class="dlg" id="cardForm" method="dialog">
@@ -215,6 +267,31 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       <span class="sp"></span>
       <button type="button" class="btn" id="cCancel">Cancel</button>
       <button type="submit" class="btn primary" id="cSave">Save card</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="entryDlg">
+  <form class="dlg" id="entryForm">
+    <div class="dlg-head"><h2 id="eHead">New entry</h2><button type="button" class="btn ghost x" id="eClose" aria-label="Close">✕</button></div>
+    <div class="dlg-body">
+      <div class="kind" role="radiogroup" aria-label="Type">
+        <label><input type="radio" name="eKind" id="eKindOut" value="out" checked><span>Money out</span></label>
+        <label><input type="radio" name="eKind" id="eKindIn" value="in"><span>Money in</span></label>
+      </div>
+      <div class="row">
+        <label class="field"><span>Amount</span><input id="eAmount" inputmode="decimal" autocomplete="off" required placeholder="0"></label>
+        <label class="field"><span>Date</span><input id="eDate" type="date" required></label>
+      </div>
+      <label class="field"><span>Description</span><input id="eDesc" required maxlength="200" placeholder="e.g. Printer ink"></label>
+      <div class="row">
+        <label class="field"><span>Category</span><input id="eCat" list="eCats" maxlength="60" placeholder="e.g. Supplies"><datalist id="eCats"></datalist></label>
+        <label class="field"><span>Linked card</span><select id="eCard"></select></label>
+      </div>
+    </div>
+    <div class="dlg-foot">
+      <button type="button" class="btn danger" id="eDelete">Delete</button><span class="sp"></span>
+      <button type="button" class="btn" id="eCancel">Cancel</button><button type="submit" class="btn primary">Save entry</button>
     </div>
   </form>
 </dialog>
@@ -276,6 +353,9 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
         <textarea class="inp" id="sPaste" placeholder="Paste a backup here to replace this board"></textarea>
         <div class="ed-row"><button class="btn small" id="sRestore">Restore from pasted backup</button></div>
       </div>
+      <div class="sect"><h3>Ledger currency</h3><div class="ed-row"><select class="inp" id="sCurrency" style="flex:0 1 240px">
+        <option value="IDR">Indonesian rupiah (Rp)</option><option value="USD">US dollar ($)</option><option value="SGD">Singapore dollar (S$)</option><option value="MYR">Malaysian ringgit (RM)</option>
+        <option value="EUR">Euro (€)</option><option value="GBP">British pound (£)</option><option value="AUD">Australian dollar (A$)</option><option value="JPY">Japanese yen (¥)</option></select></div></div>
       <div class="sect" id="sCal" hidden><h3>Google Calendar</h3><p>Cards with a due date appear as all-day events on your Google Calendar, and the card's owner is invited. Moving a card to a Finish stage, clearing its due date or deleting it removes the event. Connect on one device only, so owners don't get duplicate update emails.</p>
         <div class="ed-row"><span class="hint" id="sCalState"></span><button class="btn small" id="sCalBtn"></button></div></div>
       <div class="sect" id="sAccount" hidden><h3>Account</h3><div class="ed-row"><span class="hint" id="sEmail"></span><button class="btn small" id="sSignOut">Sign out</button></div></div>
@@ -327,13 +407,14 @@ function load() { return norm(loadLocal() || seed()); }
 const defaultColumns = () => [{ id: uid(), name: 'Backlog' }, { id: uid(), name: 'To do' }, { id: uid(), name: 'In progress', limit: 3 }, { id: uid(), name: 'Waiting on others' }, { id: uid(), name: 'Done', done: true }];
 const newProject = (name, columns) => ({ id: uid(), name, columns: columns || defaultColumns(), nextNum: 1 });
 function blankBoard() {
-  return { version: 2, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], projects: [newProject('My project')], cards: [] };
+  return { version: 2, name: "Juan's Work Board", people: [{ id: uid(), name: 'Juan', color: COLORS[0] }], projects: [newProject('My project')], cards: [], ledger: [] };
 }
 function valid(d) { return d && Array.isArray(d.cards) && Array.isArray(d.people) && ((Array.isArray(d.projects) && d.projects.length) || (Array.isArray(d.columns) && d.columns.length)); }
 /* Boards saved before projects existed had one set of columns; they become the first project. */
 function norm(d) {
   if (!Array.isArray(d.projects) || !d.projects.length) d.projects = [{ id: 'main', name: d.name || 'My project', columns: d.columns || defaultColumns(), nextNum: d.nextNum || 1 }];
   delete d.columns; delete d.nextNum; d.version = 2;
+  if (!Array.isArray(d.ledger)) d.ledger = [];
   return d;
 }
 function save() { if (mode === 'local') try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
@@ -370,7 +451,7 @@ function matches(card) {
 }
 const sorted = colId => state.cards.filter(c => c.columnId === colId).sort((a, b) => a.order - b.order);
 
-function render() { renderTop(); renderStrip(); renderBoard(); scheduleCal(); }
+function render() { renderTop(); renderView(); if (ui.view === 'ledger') renderLedger(); else { renderStrip(); renderBoard(); } scheduleCal(); }
 function renderSub() {
   const open = pc().filter(c => !doneIds().has(c.columnId)).length;
   const sync = mode === 'loading' ? 'Connecting…' : mode === 'local' ? 'Saved on this device' : writing ? 'Saving…' : 'Synced online';
@@ -430,9 +511,9 @@ function commit() { if (mode === 'local') save(); else if (mode === 'cloud') pus
 /* ---- online sync: one doc for board settings, one doc per card ---- */
 const IMPKEY = 'workboard.imported.v1';
 const clone = o => JSON.parse(JSON.stringify(o));
-const metaOf = d => { const n = norm({ ...d }); return { version: 2, name: n.name || 'Work Board', people: n.people || [], projects: n.projects }; };
+const metaOf = d => { const n = norm({ ...d }); return { version: 2, name: n.name || 'Work Board', people: n.people || [], projects: n.projects, currency: n.currency || 'IDR' }; };
 let backend = null, writing = 0, pendingRender = false;
-const synced = { meta: null, cards: new Map() }, chains = new Map();
+const synced = { meta: null, cards: new Map(), led: new Map() }, chains = new Map();
 function enqueue(key, fn) {
   writing++; renderSub();
   const p = (chains.get(key) || Promise.resolve()).then(fn).catch(writeFail);
@@ -448,8 +529,17 @@ function pushCloud() {
     if (synced.cards.get(c.id) !== j) { synced.cards.set(c.id, j); const body = JSON.parse(j); enqueue(c.id, () => backend.setCard(c.id, body)); }
   }
   for (const id of [...synced.cards.keys()]) if (!ids.has(id)) { synced.cards.delete(id); enqueue(id, () => backend.delCard(id)); }
+  const lids = new Set();
+  for (const e of state.ledger) {
+    lids.add(e.id); const j = JSON.stringify(e);
+    if (synced.led.get(e.id) !== j) { synced.led.set(e.id, j); const body = JSON.parse(j); enqueue('L:' + e.id, () => backend.setEntry(e.id, body)); }
+  }
+  for (const id of [...synced.led.keys()]) if (!lids.has(id)) { synced.led.delete(id); enqueue('L:' + id, () => backend.delEntry(id)); }
 }
-function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); Object.assign(state, m); delete state.columns; delete state.nextNum; }
+function applyLedger(list) { state.ledger = list.map(clone); synced.led = new Map(state.ledger.map(x => [x.id, JSON.stringify(x)])); }
+function applyEntry(e) { e = clone(e); const i = state.ledger.findIndex(x => x.id === e.id); if (i < 0) state.ledger.push(e); else state.ledger[i] = e; synced.led.set(e.id, JSON.stringify(e)); }
+function removeEntry(id) { state.ledger = state.ledger.filter(x => x.id !== id); synced.led.delete(id); }
+function applyMeta(d) { const m = metaOf(clone(d)); synced.meta = JSON.stringify(m); Object.assign(state, m); delete state.columns; delete state.nextNum; if (!state.ledger) state.ledger = []; }
 function applyCards(list) { state.cards = list.map(clone); synced.cards = new Map(state.cards.map(x => [x.id, JSON.stringify(x)])); }
 function applyCard(c) { c = clone(c); const i = state.cards.findIndex(x => x.id === c.id); if (i < 0) state.cards.push(c); else state.cards[i] = c; synced.cards.set(c.id, JSON.stringify(c)); }
 function removeCard(id) { state.cards = state.cards.filter(x => x.id !== id); synced.cards.delete(id); }
@@ -475,8 +565,10 @@ async function start() {
   }
   let db = null; try { db = await c.use('db'); } catch (e) {}
   if (!db) return goLocal();
-  const metaRef = db.doc('board/meta'), cardsCol = db.collection('cards');
-  backend = { setMeta: b => metaRef.set(b), setCard: (id, b) => cardsCol.doc(id).set(b), delCard: id => cardsCol.doc(id).delete() };
+  const metaRef = db.doc('board/meta'), cardsCol = db.collection('cards'), ledCol = db.collection('ledger');
+  backend = { setMeta: b => metaRef.set(b), setCard: (id, b) => cardsCol.doc(id).set(b), delCard: id => cardsCol.doc(id).delete(),
+    setEntry: (id, b) => ledCol.doc(id).set(b), delEntry: id => ledCol.doc(id).delete() };
+  ledCol.onSnapshot(s => { applyLedger(s.docs.map(d => ({ ...d.data(), id: d.id }))); scheduleRender(); }, () => {});
   let gotMeta = false, gotCards = false;
   const ready = () => { if (gotMeta && gotCards && mode === 'loading') { mode = 'cloud'; checkImport(); } scheduleRender(); };
   metaRef.onSnapshot(s => {
@@ -500,20 +592,24 @@ async function startSupabase(cfg) {
     setMeta: b => T().upsert({ board_id: uid, id: 'meta', data: b }).then(chk),
     setCard: (id, b) => T().upsert({ board_id: uid, id: 'card:' + id, data: b }).then(chk),
     delCard: id => T().delete().eq('board_id', uid).eq('id', 'card:' + id).then(chk),
+    setEntry: (id, b) => T().upsert({ board_id: uid, id: 'led:' + id, data: b }).then(chk),
+    delEntry: id => T().delete().eq('board_id', uid).eq('id', 'led:' + id).then(chk),
     signOut: () => sb.auth.signOut().then(() => location.reload())
   };
   const loadAll = async () => {
     const { data, error } = await T().select('id,data').eq('board_id', uid); if (error) throw error;
     const meta = data.find(r => r.id === 'meta'); if (meta) applyMeta(meta.data);
     applyCards(data.filter(r => r.id.startsWith('card:')).map(r => r.data));
+    applyLedger(data.filter(r => r.id.startsWith('led:')).map(r => r.data));
   };
   await loadAll();
   mode = 'cloud'; checkImport(); render();
   sb.channel('items-' + uid).on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: 'board_id=eq.' + uid }, p => {
     const row = p.eventType === 'DELETE' ? p.old : p.new; if (!row || !row.id) return;
-    const key = row.id === 'meta' ? 'meta' : row.id.slice(5);
+    const led = row.id.startsWith('led:'), key = row.id === 'meta' ? 'meta' : led ? 'L:' + row.id.slice(4) : row.id.slice(5);
     if (chains.has(key)) return; // our own write is still in flight
     if (key === 'meta') { if (p.new && p.new.data) applyMeta(p.new.data); }
+    else if (led) { if (p.eventType === 'DELETE') removeEntry(row.id.slice(4)); else applyEntry(p.new.data); }
     else if (p.eventType === 'DELETE') removeCard(key); else applyCard(p.new.data);
     scheduleRender();
   }).subscribe();
@@ -594,7 +690,7 @@ $('#strip').addEventListener('click', e => {
   if (b.dataset.pri) ui.priority = ui.priority === b.dataset.pri ? '' : b.dataset.pri;
   if (b.dataset.cal) return connectCal();
   if (b.dataset.calerr) { $('#toast').classList.add('long'); toast(gErr + ' (tap again to retry)'); clearTimeout(toastT); toastT = setTimeout(() => { $('#toast').hidden = true; $('#toast').classList.remove('long'); }, 9000); gErr = ''; return syncCal(); }
-  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project }; $('#q').value = ''; }
+  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project, view: ui.view, ledMonth: ui.ledMonth }; $('#q').value = ''; }
   saveUi(); render();
 });
 $('#clearExamples').addEventListener('click', () => { const ex = new Set(pc().filter(c => c.example).map(c => c.id)), n = ex.size; state.cards = state.cards.filter(c => !ex.has(c.id)); commit(); toast(`Removed ${n} example cards`); });
@@ -695,6 +791,112 @@ async function syncCal() {
   gBusy = false; renderStrip();
 }
 
+/* ---- Ledger: money in and out per project, with a running balance ---- */
+const CUR_DIGITS = { IDR: 0, JPY: 0 };
+function fmtMoney(n, sign) {
+  const cur = state.currency || 'IDR', d = CUR_DIGITS[cur] ?? 2;
+  let t; try { t = new Intl.NumberFormat(undefined, { style: 'currency', currency: cur, minimumFractionDigits: d, maximumFractionDigits: d }).format(Math.abs(n)); } catch (e) { t = Math.abs(n).toFixed(d); }
+  return (n < 0 ? '−' : sign && n > 0 ? '+' : '') + t;
+}
+function parseAmount(v) {
+  const cur = state.currency || 'IDR'; v = String(v).replace(/[^\d.,]/g, '');
+  if ((CUR_DIGITS[cur] ?? 2) === 0) return Number(v.replace(/[.,]/g, '')) || 0;
+  const k = Math.max(v.lastIndexOf('.'), v.lastIndexOf(','));
+  if (k >= 0 && v.length - k - 1 <= 2) return Number(v.slice(0, k).replace(/[.,]/g, '') + '.' + v.slice(k + 1)) || 0;
+  return Number(v.replace(/[.,]/g, '')) || 0;
+}
+const pl = () => { const id = P().id, first = state.projects[0].id; return state.ledger.filter(e => (e.projectId || first) === id); };
+const byDate = (a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : (a.createdAt || 0) - (b.createdAt || 0);
+const signed = e => e.kind === 'in' ? e.amount : -e.amount;
+function monthName(m) { const [y, mo] = m.split('-').map(Number); return new Date(y, mo - 1, 1).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }); }
+function renderView() {
+  if (!ui.view) ui.view = 'board';
+  document.querySelectorAll('.views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === ui.view)));
+  document.querySelectorAll('[data-board]').forEach(el => { el.hidden = ui.view !== 'board'; });
+  document.querySelectorAll('[data-ledger]').forEach(el => { el.hidden = ui.view !== 'ledger'; });
+  if (ui.view !== 'board') { $('#exampleNotice').hidden = true; }
+}
+function renderLedger() {
+  const all = pl().sort(byDate);
+  const months = [...new Set(all.map(e => e.date.slice(0, 7)))].sort().reverse();
+  if (ui.ledMonth && !months.includes(ui.ledMonth)) ui.ledMonth = '';
+  $('#ledMonth').innerHTML = '<option value="">All time</option>' + months.map(m => `<option value="${m}">${esc(monthName(m))}</option>`).join('');
+  $('#ledMonth').value = ui.ledMonth || '';
+  const m = ui.ledMonth;
+  let bal = 0, opening = 0; const rows = [];
+  for (const e of all) { if (m && e.date.slice(0, 7) < m) opening += signed(e); bal += signed(e); if (!m || e.date.slice(0, 7) === m) rows.push({ e, bal }); }
+  const tin = rows.filter(r => r.e.kind === 'in').reduce((t, r) => t + r.e.amount, 0), tout = rows.filter(r => r.e.kind !== 'in').reduce((t, r) => t + r.e.amount, 0);
+  const closing = rows.length ? rows[rows.length - 1].bal : opening + 0;
+  const cats = {}; rows.filter(r => r.e.kind !== 'in').forEach(r => { const c = r.e.category || 'Uncategorized'; cats[c] = (cats[c] || 0) + r.e.amount; });
+  const catList = Object.entries(cats).sort((a, b) => b[1] - a[1]), top = catList.length ? catList[0][1] : 0;
+  const card = id => state.cards.find(c => c.id === id);
+  const period = m ? monthName(m) : 'All time';
+  $('#ledger').innerHTML = `
+    <div class="totals">
+      <div class="total in"><span class="lbl">Money in · ${esc(period)}</span><b>${fmtMoney(tin)}</b></div>
+      <div class="total out"><span class="lbl">Money out · ${esc(period)}</span><b>${fmtMoney(tout)}</b></div>
+      <div class="total"><span class="lbl">Net · ${esc(period)}</span><b>${fmtMoney(tin - tout, true)}</b></div>
+      <div class="total"><span class="lbl">Balance${m ? ' at month end' : ''}</span><b>${fmtMoney(m ? closing : bal)}</b></div>
+    </div>
+    <div class="led-grid">
+      <section class="panel"><h3>Entries</h3>${rows.length ? `<div class="tbl-wrap"><table class="led">
+        <thead><tr><th class="date">Date</th><th>Description</th><th class="num col-in">In</th><th class="num col-out">Out</th><th class="num amt">Amount</th><th class="num">Balance</th></tr></thead><tbody>
+        ${rows.slice().reverse().map(({ e, bal }) => { const c = e.cardId && card(e.cardId); return `<tr data-eid="${e.id}" tabindex="0">
+          <td class="date">${esc(fmtDay(e.date))}</td>
+          <td>${esc(e.desc)}<span class="sub"><span class="mob-date">${esc(fmtDay(e.date))} · </span>${esc(e.category || 'Uncategorized')}${c ? ' · T-' + String(c.num).padStart(3, '0') + ' ' + esc(c.title) : ''}</span></td>
+          <td class="num in col-in">${e.kind === 'in' ? fmtMoney(e.amount) : ''}</td><td class="num out col-out">${e.kind !== 'in' ? fmtMoney(e.amount) : ''}</td>
+          <td class="num amt ${e.kind === 'in' ? 'in' : 'out'}">${fmtMoney(signed(e), true)}</td>
+          <td class="num">${fmtMoney(bal)}</td></tr>`; }).join('')}
+        ${m ? `<tr class="opening"><td class="date"></td><td>Balance brought forward</td><td class="col-in"></td><td class="col-out"></td><td class="amt"></td><td class="num">${fmtMoney(opening)}</td></tr>` : ''}
+        </tbody></table></div>` : `<div class="led-empty">${all.length ? 'No entries in this month.' : 'No entries yet. Record money coming in or going out with <b>+ New entry</b>.'}</div>`}</section>
+      <section class="panel"><h3>Spending by category</h3><div class="cats">${catList.length ? catList.map(([c, v]) => `<div class="cat-row"><div class="top"><span>${esc(c)}</span><span>${fmtMoney(v)}</span></div><div class="bar"><i style="width:${Math.max(3, Math.round(v / top * 100))}%"></i></div></div>`).join('') : '<p class="hint">Money out will be grouped by category here.</p>'}</div></section>
+    </div>`;
+}
+document.querySelector('.views').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; ui.view = b.dataset.view; saveUi(); render(); });
+$('#ledMonth').addEventListener('change', e => { ui.ledMonth = e.target.value; saveUi(); renderLedger(); });
+$('#ledger').addEventListener('click', e => { const r = e.target.closest('[data-eid]'); if (r) openEntry(r.dataset.eid); });
+$('#ledger').addEventListener('keydown', e => { const r = e.target.closest('[data-eid]'); if (r && e.key === 'Enter') openEntry(r.dataset.eid); });
+$('#ledCsv').addEventListener('click', () => {
+  const q = v => /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+  const rows = [['Date', 'Description', 'Category', 'Type', 'Amount', 'Linked card']].concat(pl().sort(byDate).filter(e => !ui.ledMonth || e.date.startsWith(ui.ledMonth)).map(e => { const c = e.cardId && state.cards.find(x => x.id === e.cardId); return [e.date, e.desc, e.category || '', e.kind === 'in' ? 'In' : 'Out', String(e.kind === 'in' ? e.amount : -e.amount), c ? 'T-' + String(c.num).padStart(3, '0') + ' ' + c.title : '']; }));
+  const txt = rows.map(r => r.map(x => q(String(x))).join(',')).join('\n');
+  navigator.clipboard.writeText(txt).then(() => toast(`Copied ${rows.length - 1} entries. Paste them into a spreadsheet`), () => toast('Copying is blocked here. Try from the installed app or another browser'));
+});
+const eDlg = $('#entryDlg'); let editingE = null, eArmed = false;
+function openEntry(id) {
+  const e = id ? state.ledger.find(x => x.id === id) : null; editingE = e ? e.id : null; eArmed = false;
+  $('#eHead').textContent = e ? 'Edit entry' : 'New entry';
+  (e && e.kind === 'in' ? $('#eKindIn') : $('#eKindOut')).checked = true;
+  const d = (CUR_DIGITS[state.currency || 'IDR'] ?? 2);
+  $('#eAmount').value = e ? (d ? e.amount.toFixed(d) : String(e.amount)) : '';
+  $('#eDate').value = e ? e.date : isoDay(new Date());
+  $('#eDesc').value = e ? e.desc : '';
+  $('#eCat').value = e ? (e.category || '') : '';
+  $('#eCats').innerHTML = [...new Set(state.ledger.map(x => x.category).filter(Boolean))].sort().map(c => `<option value="${esc(c)}">`).join('');
+  $('#eCard').innerHTML = '<option value="">None</option>' + pc().slice().sort((a, b) => a.num - b.num).map(c => `<option value="${c.id}">T-${String(c.num).padStart(3, '0')} ${esc(c.title)}</option>`).join('');
+  $('#eCard').value = e && e.cardId ? e.cardId : '';
+  $('#eDelete').hidden = !e; $('#eDelete').textContent = 'Delete'; $('#eDelete').classList.remove('armed');
+  eDlg.showModal(); $('#eAmount').focus();
+}
+$('#newEntry').addEventListener('click', () => openEntry());
+$('#eCancel').addEventListener('click', () => eDlg.close());
+$('#eClose').addEventListener('click', () => eDlg.close());
+$('#eDelete').addEventListener('click', () => {
+  const b = $('#eDelete'); if (!eArmed) { eArmed = true; b.classList.add('armed'); b.textContent = 'Click again to delete'; return; }
+  state.ledger = state.ledger.filter(x => x.id !== editingE); eDlg.close(); commit(); toast('Entry deleted');
+});
+$('#entryForm').addEventListener('submit', ev => {
+  ev.preventDefault();
+  const amount = parseAmount($('#eAmount').value), desc = $('#eDesc').value.trim(), date = $('#eDate').value;
+  if (!(amount > 0)) { toast('Enter an amount above zero'); return $('#eAmount').focus(); }
+  if (!desc || !date) return;
+  const data = { kind: $('#eKindIn').checked ? 'in' : 'out', amount, date, desc, category: $('#eCat').value.trim(), cardId: $('#eCard').value, updatedAt: Date.now() };
+  if (editingE) Object.assign(state.ledger.find(x => x.id === editingE), data);
+  else { state.ledger.push({ id: uid(), projectId: P().id, createdAt: Date.now(), ...data }); if (date.slice(0, 7) !== ui.ledMonth && ui.ledMonth) { ui.ledMonth = date.slice(0, 7); saveUi(); } }
+  eDlg.close(); commit(); toast(editingE ? 'Entry saved' : `Recorded ${fmtMoney(data.kind === 'in' ? amount : -amount, true)}`);
+});
+$('#sCurrency').addEventListener('change', e => { state.currency = e.target.value; commit(); });
+
 /* Share a card: a prefilled Google Calendar event (inviting the owner) and an email to the owner. */
 const ymd = s => s.replace(/-/g, '');
 function updateShare() {
@@ -751,7 +953,7 @@ $('#cCancel').addEventListener('click', () => dlg.close());
 $('#cClose').addEventListener('click', () => dlg.close());
 $('#newCard').addEventListener('click', () => openCard());
 document.addEventListener('keydown', e => {
-  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); openCard(); }
+  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); if (ui.view === 'ledger') openEntry(); else openCard(); }
   if (e.key === 'Enter' && document.activeElement.classList?.contains('card')) openCard(document.activeElement.dataset.id);
   if (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
 });
@@ -842,6 +1044,7 @@ function renderSettings() {
   $('#sPeople').innerHTML = state.people.map(p => `<div class="ed-row"><input type="color" id="pc-${p.id}" value="${esc(p.color)}" data-pcolor="${p.id}" aria-label="Colour for ${esc(p.name)}"><input class="inp" id="pn-${p.id}" value="${esc(p.name)}" data-pname="${p.id}" aria-label="Name"><input class="inp" type="email" id="pe-${p.id}" value="${esc(p.email || '')}" data-pemail="${p.id}" placeholder="Email" aria-label="Email for ${esc(p.name)}"><button class="btn small" data-prm="${p.id}">Remove</button></div>`).join('') || '<p>No people yet.</p>';
   renderStages();
   $('#sSaveFile').hidden = window.top !== window;
+  $('#sCurrency').value = state.currency || 'IDR';
   $('#sCal').hidden = !gcalAvailable();
   $('#sCalState').textContent = !gcal.on ? 'Not connected on this device.' : gcalLive() ? 'Connected on this device.' : 'Connected, but Google needs you to sign in again.';
   $('#sCalBtn').textContent = !gcal.on ? 'Connect Google Calendar' : gcalLive() ? 'Stop syncing' : 'Reconnect';
@@ -879,6 +1082,7 @@ const onSetClick = e => {
     if (pjArmed !== d.pjrm) { pjArmed = d.pjrm; return renderAnySettings(); }
     const first = state.projects[0].id, gone = state.projects.find(x => x.id === d.pjrm);
     state.cards = state.cards.filter(c => (c.projectId || first) !== d.pjrm);
+    state.ledger = state.ledger.filter(x => (x.projectId || first) !== d.pjrm);
     state.cards.forEach(c => { if (!c.projectId) c.projectId = first; });
     state.projects = state.projects.filter(x => x.id !== d.pjrm); pjArmed = null;
     if (ui.project === d.pjrm) { ui.project = state.projects[0].id; saveUi(); }
@@ -914,7 +1118,7 @@ $('#sReset').addEventListener('click', () => {
   const b = $('#sReset');
   if (!resetArmed) { resetArmed = true; b.classList.add('armed'); b.textContent = 'Click again to erase everything'; return; }
   const me = state.people[0] || { id: uid(), name: 'Juan', color: COLORS[0] };
-  state = { version: 2, name: state.name, people: [me], projects: [newProject('My project')], cards: [] };
+  state = { version: 2, name: state.name, people: [me], projects: [newProject('My project')], cards: [], ledger: [], currency: state.currency || 'IDR' };
   resetArmed = false; b.classList.remove('armed'); b.textContent = 'Erase board'; commit(); renderAnySettings(); toast('Board erased');
 });
 
