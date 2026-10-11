@@ -2012,7 +2012,6 @@ function mjScore(kind, c, sp) {
     else {
       if (wp === 3 && sp.pair >= 27 && sp.pair <= 30) add('Small four winds', 6);
       if (pungs.some(x => x.i === mj.seat)) add(`Seat wind pung (${MJ_WINDN[mj.seat - 27]})`, 1);
-      if (pungs.some(x => x.i === mj.round)) add(`Round wind pung (${MJ_WINDN[mj.round - 27]})`, 1);
     }
   }
   if (kind !== 'thirteen') {
@@ -2077,7 +2076,6 @@ function renderMj() {
       <label class="mj-chk"><input type="checkbox" data-act="concealed"${mj.concealed ? ' checked' : ''}> Concealed hand (no open sets)</label>
       <div class="mj-opts">
         <label class="field"><span>Seat wind</span><select data-act="seat">${winds('seat')}</select></label>
-        <label class="field"><span>Round wind</span><select data-act="round">${winds('round')}</select></label>
         <label class="field"><span>Flowers</span><select data-act="flowers">${nums(0, 8, mj.flowers)}</select></label>
         <label class="field"><span>Own flowers</span><select data-act="own"${mj.flowers ? '' : ' disabled'}>${nums(0, Math.min(2, mj.flowers), mj.own)}</select></label>
       </div>
