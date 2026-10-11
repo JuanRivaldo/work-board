@@ -298,6 +298,59 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 
 .toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 6px; font-size: 13px; z-index: 60; max-width: calc(100vw - 32px); }
 @media (max-width: 520px) { .search input { width: 100%; max-width: none; } .search { flex: 1 1 100%; } .tools { flex: 1 1 100%; flex-wrap: nowrap; } .tools { flex-wrap: wrap; } select.f { flex: 1 1 0; min-width: 0; max-width: none; } }
+/* Mahjong points: tiles stay ivory in both themes, like real tiles. */
+.mj { flex: 1; min-height: 0; overflow-y: auto; padding: 0 16px 24px; display: grid; gap: 16px; align-content: start; }
+.mj-grid { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(260px, 1fr); gap: 16px; align-items: start; }
+.mj-col { display: grid; gap: 16px; min-width: 0; }
+@media (max-width: 860px) { .mj-grid { grid-template-columns: 1fr; } }
+.mj .panel > .pad { padding: 0 14px 14px; display: grid; gap: 12px; }
+.mj .hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+.mj-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.mj-hand { display: grid; gap: 6px 4px; justify-content: start; }
+.mj-slot { border: 0; background: transparent; padding: 0; cursor: pointer; display: grid; gap: 3px; justify-items: center; color: inherit; }
+.mj-slot img { width: 40px; height: 30px; object-fit: cover; border-radius: 3px; opacity: .9; }
+.tile { width: 40px; height: 54px; border-radius: 6px; background: #FBF7EA; border: 1px solid #CFC6AE; box-shadow: 0 3px 0 #3E8763; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; color: #1A1A1A; font: 600 19px/1 "Noto Serif CJK SC", "Noto Sans CJK SC", serif; user-select: none; }
+.tile small { font: 600 11px/1 "Noto Sans CJK SC", sans-serif; }
+.tile .r { color: #C0281F; } .tile .g { color: #1E7A43; } .tile .b { color: #1F4FA0; }
+.tile .wh { width: 22px; height: 30px; border: 2px solid #1F4FA0; border-radius: 3px; }
+.tile.empty { background: transparent; border: 1.5px dashed var(--line); box-shadow: none; color: var(--muted); font: 400 20px var(--body); }
+.tile.guess { outline: 2px dashed var(--warn); outline-offset: 2px; }
+.tile.sm { width: 32px; height: 43px; font-size: 15px; } .tile.sm small { font-size: 9px; } .tile.sm .wh { width: 17px; height: 24px; }
+@media (max-width: 380px) { .tile { width: 36px; height: 49px; font-size: 17px; } .mj-slot img { width: 36px; } }
+.mj-opts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.mj-seg { display: flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.mj-seg button { flex: 1; border: 0; background: var(--bg); padding: 8px 6px; cursor: pointer; font-weight: 500; }
+.mj-seg button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+.mj-chk { display: flex; gap: 8px; align-items: center; font-size: 13.5px; }
+.mj-res .big { font: 700 34px/1 var(--display); }
+.mj-res .big small { font: 500 14px var(--body); color: var(--muted); margin-left: 6px; }
+.mj-line { display: flex; justify-content: space-between; gap: 8px; padding: 7px 14px; border-top: 1px solid var(--line); font-size: 13.5px; }
+.mj-line .v { font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mj-line.total { font-weight: 600; }
+.mj-bad { color: var(--danger); font-weight: 500; }
+.mj-players { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mj-pl { display: grid; gap: 2px; padding: 8px 10px; border-radius: 6px; background: var(--bg); }
+.mj-pl input { border: 0; background: transparent; font-weight: 600; padding: 0; width: 100%; }
+.mj-pl .v { font: 600 18px var(--mono); font-variant-numeric: tabular-nums; }
+.mj-pl .v.neg { color: var(--danger); } .mj-pl .v.pos { color: var(--ok); }
+.mj-pick { display: grid; gap: 10px; }
+.mj-pick .grp { display: flex; flex-wrap: wrap; gap: 6px; }
+.mj-pick button { border: 0; background: transparent; padding: 0; cursor: pointer; }
+.mj-pick button[aria-pressed="true"] .tile { outline: 3px solid var(--accent); outline-offset: 2px; }
+.mj-cam { position: fixed; inset: 0; z-index: 70; background: #000; color: #fff; overflow: hidden; touch-action: none; }
+.mj-cam video, .mj-cam canvas.frz { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.mj-guide { position: absolute; display: grid; border: 2px solid #fff; border-radius: 6px; box-shadow: 0 0 0 100vmax rgba(0,0,0,.55); }
+.mj-guide i { border-right: 1.5px dashed rgba(255,255,255,.85); border-bottom: 1.5px dashed rgba(255,255,255,.85); }
+.mj-guide i.last-c { border-right: 0; } .mj-guide i.last-r { border-bottom: 0; }
+.mj-guide i { background: linear-gradient(transparent calc(50% - 1px), #FFD54A calc(50% - 1px), #FFD54A calc(50% + 1px), transparent calc(50% + 1px)); }
+.mj-cam .mj-msg { position: absolute; left: 16px; right: 16px; top: calc(14px + env(safe-area-inset-top, 0px)); text-align: center; font-size: 14px; text-shadow: 0 1px 3px #000; }
+.mj-cam .mj-bar { position: absolute; left: 0; right: 0; bottom: 0; padding: 14px 16px calc(18px + env(safe-area-inset-bottom, 0px)); display: flex; align-items: center; justify-content: space-between; gap: 10px; background: linear-gradient(transparent, rgba(0,0,0,.7)); }
+.mj-cam .cbtn { border: 1px solid rgba(255,255,255,.5); background: rgba(0,0,0,.35); color: #fff; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+.mj-cam .cbtn[aria-pressed="true"] { background: #fff; color: #000; }
+.mj-cam .shoot { width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; background: rgba(255,255,255,.25); cursor: pointer; flex: none; }
+.mj-cam .shoot:active { background: #fff; }
+.mj-cam .mj-cnt { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.mj-cam .mj-cl { display: grid; gap: 8px; justify-items: start; }
 </style>
 
 <div class="shell">
@@ -306,6 +359,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   <nav class="side-nav" aria-label="View">
     <button type="button" data-view="board"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1"/></svg>Board</button>
     <button type="button" data-view="bills"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z"/><path d="M9 8h6M9 12h6"/></svg>Split bill</button>
+    <button type="button" data-view="mj"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M12 7v10M8 12h8"/></svg>Mahjong points</button>
   </nav>
   <button type="button" class="side-hide" id="hideSide" title="Hide menu"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>Hide menu</button>
 </aside>
@@ -346,10 +400,29 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
 <main class="board" id="board" aria-label="Board columns" data-board></main>
 <main class="ledger" id="ledger" aria-label="Ledger" data-ledger hidden></main>
 <main class="bills" id="bills" aria-label="Split bill" data-bills hidden></main>
+<main class="mj" id="mj" aria-label="Mahjong points" data-mj hidden></main>
 </div>
 </div>
 <main class="guest-wrap" id="guest" hidden></main>
 <input type="file" id="billFile" accept="image/*" hidden>
+<div class="mj-cam" id="mjCam" hidden>
+  <video id="mjVid" playsinline muted autoplay></video>
+  <div class="mj-guide" id="mjGuide"></div>
+  <p class="mj-msg" id="mjMsg"></p>
+  <div class="mj-bar">
+    <div class="mj-cl"><div class="mj-cnt"><button type="button" class="cbtn" id="mjMinus" aria-label="Fewer tiles">−</button><span id="mjN"></span><button type="button" class="cbtn" id="mjPlus" aria-label="More tiles">+</button></div>
+      <div class="mj-cnt"><button type="button" class="cbtn" id="mjRows"></button><button type="button" class="cbtn" id="mjTorch" hidden>Light</button></div></div>
+    <button type="button" class="shoot" id="mjShoot" aria-label="Scan tiles"></button>
+    <button type="button" class="cbtn" id="mjCamClose">Cancel</button>
+  </div>
+</div>
+<dialog id="mjPickDlg">
+  <div class="dlg">
+    <div class="dlg-head"><h2 id="mjPickHead">Tile</h2><button type="button" class="btn ghost x" id="mjPickX" aria-label="Close">✕</button></div>
+    <div class="dlg-body"><div id="mjPickPhoto"></div><div class="mj-pick" id="mjPickBody"></div></div>
+    <div class="dlg-foot"><button type="button" class="btn danger" id="mjPickClear">Remove tile</button><span class="sp"></span><button type="button" class="btn primary" id="mjPickDone">Done</button></div>
+  </div>
+</dialog>
 
 <dialog id="cardDlg">
   <form class="dlg" id="cardForm" method="dialog">
@@ -592,7 +665,7 @@ function matches(card) {
 }
 const sorted = colId => state.cards.filter(c => c.columnId === colId).sort((a, b) => a.order - b.order);
 
-function render() { renderTop(); renderView(); if (ui.view === 'ledger') renderLedger(); else if (ui.view === 'bills') renderBills(); else { renderStrip(); renderBoard(); } scheduleCal(); }
+function render() { renderTop(); renderView(); if (ui.view === 'ledger') renderLedger(); else if (ui.view === 'bills') renderBills(); else if (ui.view === 'mj') renderMj(); else { renderStrip(); renderBoard(); } scheduleCal(); }
 function renderSub() {
   const open = pc().filter(c => !doneIds().has(c.columnId)).length;
   const sync = mode === 'loading' ? 'Connecting…' : mode === 'local' ? 'Saved on this device' : writing ? 'Saving…' : 'Synced online';
@@ -1056,6 +1129,7 @@ function renderView() {
   document.querySelectorAll('[data-board]').forEach(el => { el.hidden = ui.view !== 'board'; });
   document.querySelectorAll('[data-ledger]').forEach(el => { el.hidden = ui.view !== 'ledger'; });
   document.querySelectorAll('[data-bills]').forEach(el => { el.hidden = ui.view !== 'bills'; });
+  document.querySelectorAll('[data-mj]').forEach(el => { el.hidden = ui.view !== 'mj'; });
   if (ui.view !== 'board') { $('#exampleNotice').hidden = true; }
 }
 function renderLedger() {
@@ -1098,7 +1172,7 @@ function renderLedger() {
         </tbody></table></div>` : `<div class="led-empty">${all.length ? 'No entries in this month.' : 'No entries yet. Record money coming in or going out with <b>+ New entry</b>.'}</div>`}</section>
       <div class="side-panels">
       <section class="panel"><h3>Money in by person</h3><div class="cats">${inList.length ? inList.map(([c, v]) => `<div class="cat-row"><div class="top"><span>${esc(c)}</span><span>${fmtMoney(v)}</span></div><div class="bar in"><i style="width:${Math.max(3, Math.round(Math.abs(v) / inTop * 100))}%"></i></div>${share ? `<div class="net">After splitting money out equally: <b>${fmtMoney(v - share, true)}</b></div>` : ''}</div>`).join('') + (share ? `<p class="hint">Each share of money out: ${fmtMoney(share)}</p>` : '') : '<p class="hint">Money in is grouped by its category here. Use a person\'s name as the category, e.g. Juan or Deva.</p>'}</div></section>
-      <section class="panel"><h3>Spending by category</h3><div class="cats">${catList.length ? catList.map(([c, v]) => `<div class="cat-row"><div class="top"><span>${esc(c)}</span><span>${fmtMoney(v)}</span></div><div class="bar"><i style="width:${Math.max(3, Math.round(v / top * 100))}%"></i></div></div>`).join('') : '<p class="hint">Money out will be grouped by category here.</p>'}</div></section>
+      <section class="panel"><h3>Spending by category</h3><div class="cats">${catList.length ? catList.map(([c, v]) => `<div class="cat-row"><div class="top"><span>${esc(c)}</span><span>${fmtMoney(v)}</span></div><div class="mj-bar"><i style="width:${Math.max(3, Math.round(v / top * 100))}%"></i></div></div>`).join('') : '<p class="hint">Money out will be grouped by category here.</p>'}</div></section>
       </div>
     </div>`;
 }
@@ -1671,7 +1745,7 @@ $('#cCancel').addEventListener('click', () => dlg.close());
 $('#cClose').addEventListener('click', () => dlg.close());
 $('#newCard').addEventListener('click', () => openCard());
 document.addEventListener('keydown', e => {
-  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); if (ui.view === 'ledger') openEntry(); else if (ui.view === 'bills') newBill(); else openCard(); }
+  if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { if (ui.view === 'mj') return; e.preventDefault(); if (ui.view === 'ledger') openEntry(); else if (ui.view === 'bills') newBill(); else openCard(); }
   if (e.key === 'Enter' && document.activeElement.classList?.contains('card')) openCard(document.activeElement.dataset.id);
   if (e.key === '/' && !document.querySelector('dialog[open]') && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); $('#q').focus(); }
 });
@@ -1884,6 +1958,334 @@ $('#sInstallBtn').addEventListener('click', async () => {
 });
 $('#sSignOut').addEventListener('click', () => backend && backend.signOut && backend.signOut());
 $('#skipImport').addEventListener('click', () => { try { localStorage.setItem(IMPKEY, '1'); } catch (e) {} $('#importNotice').hidden = true; });
+/* ---- Mahjong points. The camera shows a guide grid, one box per tile, with a yellow line through the middle of each
+   row. A scan cuts the photo along that grid and compares each box with tiles taught on this device (no internet or
+   paid service needed): the first scans are tapped in by hand, and every tile tapped is remembered as an example, so
+   later scans fill in by themselves. Scoring follows Hong Kong old-style faan rules. Hands and the score table are
+   kept on this device only. Tiles: 0-8 characters, 9-17 dots, 18-26 bamboo, 27-30 E S W N, 31 red, 32 green, 33 white. ---- */
+const MJKEY = 'workboard.mj.v1', MJTPL = 'workboard.mj.tpl.v1';
+const MJ_PTS = [1, 2, 4, 8, 16, 24, 32, 48, 64, 96, 128, 192, 256, 384];
+const MJ_CN = '一二三四五六七八九', MJ_WIND = '東南西北', MJ_WINDN = ['East', 'South', 'West', 'North'];
+const mjDefault = () => ({ n: 14, rows: 2, hand: Array(14).fill(null), self: false, concealed: true, seat: 27, round: 27, flowers: 0, own: 0, last: false, kongWin: false, rob: false,
+  min: 3, cap: 10, selfPay: 'half', unit: 0, players: ['Juan', 'Player 2', 'Player 3', 'Player 4'], log: [], winner: 0, from: -1 });
+let mj = mjDefault();
+try { Object.assign(mj, JSON.parse(localStorage.getItem(MJKEY)) || {}); } catch (e) {}
+let mjSlots = mj.hand.map(() => ({})), mjPickAt = -1, mjStream = null, mjNewArmed = false;
+const saveMj = () => { try { localStorage.setItem(MJKEY, JSON.stringify(mj)); } catch (e) {} };
+function mjResize(n) {
+  n = Math.max(14, Math.min(18, n)); mj.n = n;
+  while (mj.hand.length < n) { mj.hand.push(null); mjSlots.push({}); }
+  mj.hand.length = n; mjSlots.length = n; saveMj();
+}
+const mjSuit = i => i < 27 ? Math.floor(i / 9) : -1, mjNum = i => i % 9 + 1;
+const mjTerm = i => i >= 27 || mjNum(i) === 1 || mjNum(i) === 9;
+function mjName(i) {
+  if (i < 27) return `${mjNum(i)} ${['Characters', 'Dots', 'Bamboo'][mjSuit(i)]}`;
+  return i < 31 ? `${MJ_WINDN[i - 27]} wind` : ['Red', 'Green', 'White'][i - 31] + ' dragon';
+}
+function mjTile(i, cls = '') {
+  if (i == null) return `<span class="tile empty ${cls}">+</span>`;
+  let face;
+  if (i < 9) face = `<span>${MJ_CN[i]}</span><small class="r">萬</small>`;
+  else if (i < 18) face = `<span class="b">${mjNum(i)}</span><small class="b">筒</small>`;
+  else if (i < 27) face = `<span class="g">${mjNum(i)}</span><small class="g">索</small>`;
+  else if (i < 31) face = `<span>${MJ_WIND[i - 27]}</span>`;
+  else face = [`<span class="r">中</span>`, `<span class="g">發</span>`, `<span class="wh"></span>`][i - 31];
+  return `<span class="tile ${cls}" title="${mjName(i)}">${face}</span>`;
+}
+
+/* Scoring. Every way of splitting the hand into sets and a pair is scored and the best one counts. */
+function mjSplits(c, kongs) {
+  const out = [];
+  const sets = (i, k, melds, pair) => {
+    while (i < 34 && !c[i]) i++;
+    if (i === 34) { if (!k) out.push({ melds: melds.slice(), pair }); return; }
+    if (c[i] >= 4 && k) { c[i] -= 4; melds.push({ t: 'kong', i }); sets(i, k - 1, melds, pair); melds.pop(); c[i] += 4; }
+    if (c[i] >= 3) { c[i] -= 3; melds.push({ t: 'pung', i }); sets(i, k, melds, pair); melds.pop(); c[i] += 3; }
+    if (i < 27 && mjNum(i) <= 7 && c[i + 1] && c[i + 2]) { c[i]--; c[i + 1]--; c[i + 2]--; melds.push({ t: 'chow', i }); sets(i, k, melds, pair); melds.pop(); c[i]++; c[i + 1]++; c[i + 2]++; }
+  };
+  for (let p = 0; p < 34; p++) if (c[p] >= 2) { c[p] -= 2; sets(0, kongs, [], p); c[p] += 2; }
+  return out;
+}
+function mjScore(kind, c, sp) {
+  const it = [], add = (name, f) => it.push([name, f]);
+  const used = new Set(), tiles = []; c.forEach((n, i) => { for (let k = 0; k < n; k++) tiles.push(i); });
+  tiles.forEach(i => used.add(mjSuit(i)));
+  const honors = used.has(-1); used.delete(-1);
+  if (kind === 'thirteen') add('Thirteen orphans', 'L');
+  else if (kind === 'pairs') add('Seven pairs', 4);
+  else {
+    const m = sp.melds, pungs = m.filter(x => x.t !== 'chow');
+    if (m.length === 4 && m.every(x => x.t === 'kong')) add('Four kongs', 'L');
+    if (!pungs.length) add('All chows', 1);
+    if (pungs.length === 4) { if (mj.concealed && mj.self) add('Four concealed pungs', 'L'); else add('All pungs', 3); }
+    const dp = pungs.filter(x => x.i >= 31).length, wp = pungs.filter(x => x.i >= 27 && x.i <= 30).length;
+    if (dp === 3) add('Great three dragons', 8);
+    else if (dp === 2 && sp.pair >= 31) add('Small three dragons', 5);
+    else for (let k = 0; k < dp; k++) add('Dragon pung', 1);
+    if (wp === 4) add('Great four winds', 'L');
+    else {
+      if (wp === 3 && sp.pair >= 27 && sp.pair <= 30) add('Small four winds', 6);
+      if (pungs.some(x => x.i === mj.seat)) add(`Seat wind pung (${MJ_WINDN[mj.seat - 27]})`, 1);
+      if (pungs.some(x => x.i === mj.round)) add(`Round wind pung (${MJ_WINDN[mj.round - 27]})`, 1);
+    }
+  }
+  if (kind !== 'thirteen') {
+    if (!used.size) add('All honors', 'L');
+    else if (tiles.every(mjTerm)) { if (!honors) add('All terminals', 'L'); else add('Mixed terminals', 1); }
+    if (used.size === 1) { if (honors) add('Mixed one suit', 3); else add('Pure one suit', 7); }
+  }
+  if (mj.self) add('Self-drawn', 1);
+  if (mj.concealed) add('Concealed hand', 1);
+  if (!mj.flowers) add('No flowers', 1); else if (mj.own) add(mj.own > 1 ? `Own flowers ×${mj.own}` : 'Own flower', mj.own);
+  if (mj.last) add('Win on the last tile', 1);
+  if (mj.kongWin) add('Win on a kong replacement', 1);
+  if (mj.rob) add('Robbing a kong', 1);
+  const limit = it.some(x => x[1] === 'L'), raw = it.reduce((t, x) => t + (x[1] === 'L' ? 0 : x[1]), 0);
+  const faan = limit ? mj.cap : Math.min(raw, mj.cap);
+  return { items: it, limit, raw, faan, pts: MJ_PTS[faan] };
+}
+function mjEval() {
+  const have = mj.hand.filter(x => x != null);
+  if (have.length < mj.n) return { missing: mj.n - have.length };
+  const c = Array(34).fill(0); have.forEach(i => c[i]++);
+  if (c.some(n => n > 4)) return { error: 'There are more than 4 of the same tile. Tap a tile to fix it.' };
+  const opts = [];
+  if (mj.n === 14 && [0, 8, 9, 17, 18, 26, 27, 28, 29, 30, 31, 32, 33].every(i => c[i]) && have.every(mjTerm)) opts.push(mjScore('thirteen', c));
+  if (mj.n === 14 && c.filter(n => n === 2).length === 7) opts.push(mjScore('pairs', c));
+  mjSplits(c.slice(), mj.n - 14).forEach(sp => opts.push(mjScore('std', c, sp)));
+  if (!opts.length) return { error: `These tiles don't make a winning hand (4 sets and a pair${mj.n > 14 ? `, with ${mj.n - 14} kong${mj.n > 15 ? 's' : ''}` : ''}). Check the tiles or the tile count.` };
+  return opts.sort((a, b) => b.faan - a.faan || b.raw - a.raw)[0];
+}
+function mjPay(pts) { return mj.selfPay === 'half' ? pts / 2 : pts; }
+const mjNum2 = n => (Math.round(n * 100) / 100).toLocaleString();
+const mjMoney = n => mj.unit > 0 ? ` (${fmtMoney(n * mj.unit)})` : '';
+function mjTotals() {
+  const t = [0, 0, 0, 0];
+  mj.log.forEach(e => { if (e.from < 0) { t.forEach((_, k) => { if (k !== e.w) { t[k] -= e.each; t[e.w] += e.each; } }); } else { t[e.from] -= e.pts; t[e.w] += e.pts; } });
+  return t;
+}
+
+function renderMj() {
+  const el = $('#mj'), r = mjEval(), cols = Math.ceil(mj.n / mj.rows), seg = (act, v, label) => `<button type="button" data-act="${act}" data-v="${v}" aria-pressed="${String(String(mj[act]) === String(v))}">${label}</button>`;
+  const winds = sel => [27, 28, 29, 30].map(w => `<option value="${w}"${mj[sel] === w ? ' selected' : ''}>${MJ_WINDN[w - 27]}</option>`).join('');
+  const nums = (a, b, v) => Array.from({ length: b - a + 1 }, (_, k) => `<option${a + k === v ? ' selected' : ''}>${a + k}</option>`).join('');
+  const ok = r.items && (r.limit || r.faan >= mj.min);
+  let res;
+  if (r.missing) res = `<p class="hint">${r.missing === mj.n ? 'Scan the tiles or tap the boxes to put them in.' : `Add ${r.missing} more tile${r.missing > 1 ? 's' : ''} to see the points.`}</p>`;
+  else if (r.error) res = `<p class="mj-bad">${esc(r.error)}</p>`;
+  else res = `<div class="big">${r.limit ? 'Limit' : r.faan + ' faan'}<small>${mjNum2(r.pts)} points</small></div>` +
+    (ok ? '' : `<p class="mj-bad">Below the ${mj.min} faan minimum, so this hand can't win.</p>`);
+  const lines = r.items ? r.items.map(([n, f]) => `<div class="mj-line"><span>${esc(n)}</span><span class="v">${f === 'L' ? 'Limit' : '+' + f}</span></div>`).join('') +
+    (!r.limit && r.raw > mj.cap ? `<div class="mj-line"><span>Capped at the limit</span><span class="v">${mj.cap}</span></div>` : '') +
+    (ok ? `<div class="mj-line total"><span>${mj.self ? 'Each other player pays' : 'The player who discarded pays'}</span><span class="v">${mjNum2(mj.self ? mjPay(r.pts) : r.pts)}${mjMoney(mj.self ? mjPay(r.pts) : r.pts)}</span></div>` : '') : '';
+  const tot = mjTotals(), plOpts = v => mj.players.map((p, k) => `<option value="${k}"${v === k ? ' selected' : ''}>${esc(p)}</option>`).join('');
+  el.innerHTML = `<div class="mj-grid"><div class="mj-col">
+    <section class="panel"><h3>Hand</h3><div class="pad">
+      <div class="mj-hand" style="grid-template-columns:repeat(${cols}, auto)">${mj.hand.map((t, k) => `<button type="button" class="mj-slot" data-slot="${k}" aria-label="${t == null ? 'Empty, tap to add a tile' : mjName(t)}">${mjSlots[k].thumb ? `<img src="${mjSlots[k].thumb}" alt="">` : ''}${mjTile(t, mjSlots[k].guess ? 'guess' : '')}</button>`).join('')}</div>
+      ${mjSlots.some(s => s.guess) ? '<p class="hint">Tiles with a dashed outline were guessed from the photo. Tap one to fix it. Every fix teaches the scanner your tiles.</p>' : ''}
+      <div class="mj-acts"><button type="button" class="btn primary" data-act="scan">Scan tiles</button><button type="button" class="btn" data-act="sort">Sort</button><button type="button" class="btn" data-act="clear">Clear</button>
+        <select class="f" data-act="n" aria-label="Number of tiles">${[14, 15, 16, 17, 18].map(n => `<option value="${n}"${mj.n === n ? ' selected' : ''}>${n} tiles${n > 14 ? ` (${n - 14} kong${n > 15 ? 's' : ''})` : ''}</option>`).join('')}</select></div>
+    </div></section>
+    <section class="panel"><h3>How it was won</h3><div class="pad">
+      <div class="mj-seg">${seg('self', false, 'From a discard')}${seg('self', true, 'Self-drawn')}</div>
+      <label class="mj-chk"><input type="checkbox" data-act="concealed"${mj.concealed ? ' checked' : ''}> Concealed hand (no open sets)</label>
+      <div class="mj-opts">
+        <label class="field"><span>Seat wind</span><select data-act="seat">${winds('seat')}</select></label>
+        <label class="field"><span>Round wind</span><select data-act="round">${winds('round')}</select></label>
+        <label class="field"><span>Flowers</span><select data-act="flowers">${nums(0, 8, mj.flowers)}</select></label>
+        <label class="field"><span>Own flowers</span><select data-act="own"${mj.flowers ? '' : ' disabled'}>${nums(0, Math.min(2, mj.flowers), mj.own)}</select></label>
+      </div>
+      <label class="mj-chk"><input type="checkbox" data-act="last"${mj.last ? ' checked' : ''}> Won on the last tile of the wall</label>
+      <label class="mj-chk"><input type="checkbox" data-act="kongWin"${mj.kongWin ? ' checked' : ''}> Won on a kong replacement tile</label>
+      <label class="mj-chk"><input type="checkbox" data-act="rob"${mj.rob ? ' checked' : ''}> Robbed a kong</label>
+    </div></section>
+  </div><div class="mj-col">
+    <section class="panel mj-res"><h3>Points</h3><div class="pad">${res}</div>${lines}</section>
+    <section class="panel"><h3>Score table</h3><div class="pad">
+      <div class="mj-players">${mj.players.map((p, k) => `<div class="mj-pl"><input data-pl="${k}" value="${esc(p)}" aria-label="Player ${k + 1} name" maxlength="20"><span class="v ${tot[k] < 0 ? 'neg' : tot[k] > 0 ? 'pos' : ''}">${tot[k] > 0 ? '+' : ''}${mjNum2(tot[k])}</span>${mj.unit > 0 && tot[k] ? `<span class="hint">${fmtMoney(tot[k] * mj.unit)}</span>` : ''}</div>`).join('')}</div>
+      <div class="mj-opts">
+        <label class="field"><span>Winner</span><select data-act="winner">${plOpts(mj.winner)}</select></label>
+        <label class="field"><span>Paid by</span><select data-act="from"><option value="-1"${mj.from < 0 ? ' selected' : ''}>Everyone (self-drawn)</option>${mj.players.map((p, k) => k === mj.winner ? '' : `<option value="${k}"${mj.from === k ? ' selected' : ''}>${esc(p)}</option>`).join('')}</select></label>
+      </div>
+      <div class="mj-acts"><button type="button" class="btn primary" data-act="record"${ok ? '' : ' disabled'}>Add ${ok ? mjNum2(r.pts) + ' points ' : ''}to score</button>${mj.log.length ? `<button type="button" class="btn danger${mjNewArmed ? ' armed' : ''}" data-act="newgame">${mjNewArmed ? 'Tap again to clear' : 'New game'}</button>` : ''}</div>
+    </div>${mj.log.slice().reverse().slice(0, 12).map(e => `<div class="mj-line"><span>${esc(mj.players[e.w])} won ${e.limit ? 'a limit hand' : e.faan + ' faan'}<small class="hint" style="display:block">${e.from < 0 ? `Self-drawn, ${mjNum2(e.each)} from each player` : `${esc(mj.players[e.from])} paid ${mjNum2(e.pts)}`}</small></span><span class="v">+${mjNum2(e.from < 0 ? e.each * 3 : e.pts)} <button type="button" class="btn ghost icon-btn" data-del="${e.id}" aria-label="Remove this hand">✕</button></span></div>`).join('')}</section>
+    <section class="panel"><h3>Rules</h3><div class="pad">
+      <p class="hint">Hong Kong old-style faan. Points double up to 4 faan, then go up by half steps: 3 faan = 8, 5 = 24, 7 = 48, 10 = 128.</p>
+      <div class="mj-opts">
+        <label class="field"><span>Minimum faan</span><select data-act="min">${nums(0, 5, mj.min)}</select></label>
+        <label class="field"><span>Limit</span><select data-act="cap">${[8, 10, 13].map(n => `<option value="${n}"${mj.cap === n ? ' selected' : ''}>${n} faan</option>`).join('')}</select></label>
+        <label class="field"><span>Self-drawn: each pays</span><select data-act="selfPay"><option value="half"${mj.selfPay === 'half' ? ' selected' : ''}>Half</option><option value="full"${mj.selfPay === 'full' ? ' selected' : ''}>Full</option></select></label>
+        <label class="field"><span>Money per point</span><input class="inp" inputmode="numeric" data-act="unit" value="${mj.unit || ''}" placeholder="Off"></label>
+      </div>
+      <p class="hint">The scanner knows ${mjTplCount()} tile examples on this phone.${mjTplCount() ? ' <button type="button" class="btn ghost" data-act="forget" style="padding:2px 4px">Forget them</button>' : ''}</p>
+    </div></section>
+  </div></div>`;
+}
+$('#mj').addEventListener('click', e => {
+  const s = e.target.closest('[data-slot]'); if (s) return mjOpenPick(Number(s.dataset.slot));
+  const d = e.target.closest('[data-del]'); if (d) { mj.log = mj.log.filter(x => x.id !== d.dataset.del); saveMj(); return renderMj(); }
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const a = b.dataset.act;
+  if (a !== 'newgame') mjNewArmed = false;
+  if (a === 'self') { mj.self = b.dataset.v === 'true'; mj.from = mj.self ? -1 : (mj.from < 0 ? (mj.winner + 1) % 4 : mj.from); }
+  else if (a === 'scan') return mjOpenCam();
+  else if (a === 'sort') { const z = mj.hand.map((t, k) => [t, mjSlots[k]]).sort((x, y) => (x[0] ?? 99) - (y[0] ?? 99)); mj.hand = z.map(x => x[0]); mjSlots = z.map(x => x[1]); }
+  else if (a === 'clear') { mj.hand = Array(mj.n).fill(null); mjSlots = mj.hand.map(() => ({})); }
+  else if (a === 'record') {
+    const r = mjEval(); if (!r.items) return;
+    if (mj.from === mj.winner) return toast('The winner can’t also be the one who paid');
+    mj.log.push({ id: uid(), at: Date.now(), w: mj.winner, from: mj.from, faan: r.faan, limit: r.limit, pts: r.pts, each: mjPay(r.pts) });
+    mjSlots.forEach((s, k) => mjLearn(k));
+    mj.hand = Array(mj.n).fill(null); mjSlots = mj.hand.map(() => ({}));
+    Object.assign(mj, { self: false, flowers: 0, own: 0, last: false, kongWin: false, rob: false, concealed: true, from: (mj.winner + 1) % 4 });
+    toast(`Added to ${mj.players[mj.log[mj.log.length - 1].w]}’s score`);
+  }
+  else if (a === 'newgame') { if (!mjNewArmed) { mjNewArmed = true; return renderMj(); } mjNewArmed = false; mj.log = []; toast('Score table cleared'); }
+  else if (a === 'forget') { try { localStorage.removeItem(MJTPL); } catch (err) {} mjTpl = {}; toast('The scanner forgot your tiles'); }
+  saveMj(); renderMj();
+});
+$('#mj').addEventListener('change', e => {
+  const p = e.target.closest('[data-pl]');
+  if (p) { mj.players[Number(p.dataset.pl)] = p.value.trim() || `Player ${Number(p.dataset.pl) + 1}`; saveMj(); return renderMj(); }
+  const a = e.target.dataset.act; if (!a) return;
+  const v = e.target.value;
+  if (a === 'n') mjResize(Number(v));
+  else if (a === 'selfPay') mj.selfPay = v;
+  else if (a === 'unit') mj.unit = Math.max(0, parseAmount(v));
+  else if (e.target.type === 'checkbox') mj[a] = e.target.checked;
+  else mj[a] = Number(v);
+  if (a === 'flowers') mj.own = Math.min(mj.own, mj.flowers, 2);
+  if (a === 'winner' && mj.from === mj.winner) mj.from = -1;
+  if (a === 'from') mj.self = mj.from < 0;
+  saveMj(); renderMj();
+});
+
+/* Tile picker: opens on a box and moves on to the next empty or guessed box, so a fresh scan can be filled in quickly. */
+function mjOpenPick(k) {
+  mjPickAt = k; const s = mjSlots[k];
+  $('#mjPickHead').textContent = `Tile ${k + 1} of ${mj.n}`;
+  $('#mjPickPhoto').innerHTML = s.thumb ? `<img src="${s.thumb}" alt="Photo of this tile" style="height:72px;border-radius:4px">` : '';
+  const grp = (a, b) => `<div class="grp">${Array.from({ length: b - a }, (_, j) => `<button type="button" data-pick="${a + j}" aria-label="${mjName(a + j)}" aria-pressed="${String(mj.hand[k] === a + j)}">${mjTile(a + j, 'sm')}</button>`).join('')}</div>`;
+  $('#mjPickBody').innerHTML = `<span class="lbl">Characters</span>${grp(0, 9)}<span class="lbl">Dots</span>${grp(9, 18)}<span class="lbl">Bamboo</span>${grp(18, 27)}<span class="lbl">Winds and dragons</span>${grp(27, 34)}`;
+  if (!$('#mjPickDlg').open) $('#mjPickDlg').showModal();
+}
+$('#mjPickBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-pick]'); if (!b) return;
+  const k = mjPickAt; mj.hand[k] = Number(b.dataset.pick); mjSlots[k].guess = false; mjLearn(k); saveMj(); renderMj();
+  const next = mj.hand.findIndex((t, j) => j > k && (t == null || mjSlots[j].guess));
+  if (next >= 0) mjOpenPick(next); else $('#mjPickDlg').close();
+});
+$('#mjPickClear').addEventListener('click', () => { mj.hand[mjPickAt] = null; mjSlots[mjPickAt].guess = false; saveMj(); renderMj(); $('#mjPickDlg').close(); });
+$('#mjPickDone').addEventListener('click', () => $('#mjPickDlg').close());
+$('#mjPickX').addEventListener('click', () => $('#mjPickDlg').close());
+
+/* Tile examples: each is the middle of a scanned box shrunk to 20x28 grey pixels. A new box is compared with every
+   example at small shifts (tiles never sit exactly in their box) and takes the closest one if it is close enough. */
+const MJ_W = 24, MJ_H = 32, MJ_TW = 20, MJ_TH = 28;
+let mjTpl = null;
+function mjTplLoad() {
+  if (mjTpl) return mjTpl; mjTpl = {};
+  try { const raw = JSON.parse(localStorage.getItem(MJTPL)) || {}; for (const k in raw) mjTpl[k] = raw[k].map(b => Uint8Array.from(atob(b), ch => ch.charCodeAt(0))); } catch (e) {}
+  return mjTpl;
+}
+function mjTplSave() {
+  const out = {}; for (const k in mjTpl) out[k] = mjTpl[k].map(a => btoa(String.fromCharCode(...a)));
+  try { localStorage.setItem(MJTPL, JSON.stringify(out)); } catch (e) {}
+}
+const mjTplCount = () => Object.values(mjTplLoad()).reduce((t, a) => t + a.length, 0);
+function mjWin(g, dx, dy) {
+  const w = new Uint8Array(MJ_TW * MJ_TH), ox = (MJ_W - MJ_TW) / 2 + dx, oy = (MJ_H - MJ_TH) / 2 + dy;
+  for (let y = 0; y < MJ_TH; y++) for (let x = 0; x < MJ_TW; x++) w[y * MJ_TW + x] = g[(y + oy) * MJ_W + x + ox];
+  return w;
+}
+function mjNorm(a) {
+  let m = 0; for (const v of a) m += v; m /= a.length;
+  const o = new Float32Array(a.length); let s = 0; a.forEach((v, i) => { o[i] = v - m; s += o[i] * o[i]; });
+  s = Math.sqrt(s) || 1; for (let i = 0; i < o.length; i++) o[i] /= s; return o;
+}
+function mjLearn(k) {
+  const s = mjSlots[k], t = mj.hand[k]; if (!s || !s.gray || t == null || s.learned === t) return;
+  const tp = mjTplLoad(), list = tp[t] = tp[t] || [];
+  list.push(mjWin(s.gray, 0, 0)); if (list.length > 6) list.shift();
+  s.learned = t; mjTplSave();
+}
+function mjGuess(g) {
+  const tp = mjTplLoad(), norms = [];
+  for (const k in tp) tp[k].forEach(a => norms.push([Number(k), mjNorm(a)]));
+  if (!norms.length) return null;
+  let best = -1, bestT = null;
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+    const q = mjNorm(mjWin(g, dx, dy));
+    for (const [t, n] of norms) { let d = 0; for (let i = 0; i < q.length; i++) d += q[i] * n[i]; if (d > best) { best = d; bestT = t; } }
+  }
+  return best >= 0.6 ? bestT : null;
+}
+
+/* Camera with the guide grid. The grid is placed over the live picture; on capture each box is mapped back onto the
+   camera frame (the picture fills the screen, so it is scaled and cropped like CSS object-fit: cover). */
+function mjGuideBox() {
+  const W = innerWidth, H = innerHeight, cols = Math.ceil(mj.n / mj.rows), asp = (cols * 3) / (mj.rows * 4);
+  const avH = H - 250, w = Math.min(W * 0.94, avH * asp, 900), h = w / asp;
+  return { left: (W - w) / 2, top: 80 + (avH - h) / 2, w, h, cols };
+}
+function mjLayoutGuide() {
+  const g = $('#mjGuide'), b = mjGuideBox(), cells = b.cols * mj.rows;
+  Object.assign(g.style, { left: b.left + 'px', top: b.top + 'px', width: b.w + 'px', height: b.h + 'px', gridTemplateColumns: `repeat(${b.cols}, 1fr)`, gridTemplateRows: `repeat(${mj.rows}, 1fr)` });
+  g.innerHTML = Array.from({ length: cells }, (_, k) => `<i class="${k % b.cols === b.cols - 1 ? 'last-c' : ''} ${k >= cells - b.cols ? 'last-r' : ''}"${k >= mj.n ? ' style="background:rgba(0,0,0,.5)"' : ''}></i>`).join('');
+  $('#mjN').textContent = `${mj.n} tiles`; $('#mjRows').textContent = mj.rows === 2 ? '2 rows' : '1 row';
+}
+async function mjOpenCam() {
+  $('#mjCam').hidden = false; mjLayoutGuide();
+  $('#mjMsg').textContent = 'Lay the tiles face up and fit one tile in each box, with the yellow line across the middle of each row. Hold the phone straight above them.';
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { $('#mjMsg').textContent = 'This browser can’t open the camera here. Open the app from your home screen or in Chrome.'; return; }
+  try {
+    mjStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false });
+    const v = $('#mjVid'); v.srcObject = mjStream; await v.play().catch(() => {});
+    const tr = mjStream.getVideoTracks()[0], cap = tr.getCapabilities ? tr.getCapabilities() : {};
+    $('#mjTorch').hidden = !cap.torch; $('#mjTorch').setAttribute('aria-pressed', 'false');
+    if (cap.focusMode && cap.focusMode.includes('continuous')) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+  } catch (err) {
+    $('#mjMsg').textContent = err && err.name === 'NotAllowedError' ? 'Camera access is blocked. Allow the camera for this app in the browser’s site settings, then try again.' : 'The camera couldn’t start. Close other apps using it and try again.';
+  }
+}
+function mjCloseCam() {
+  if (mjStream) mjStream.getTracks().forEach(t => t.stop()); mjStream = null;
+  $('#mjVid').srcObject = null; $('#mjCam').hidden = true;
+}
+function mjCapture() {
+  const v = $('#mjVid'), vw = v.videoWidth, vh = v.videoHeight; if (!vw) return toast('The camera isn’t ready yet');
+  const ew = v.clientWidth, eh = v.clientHeight, sc = Math.max(ew / vw, eh / vh), ox = (ew - vw * sc) / 2, oy = (eh - vh * sc) / 2;
+  const frame = document.createElement('canvas'); frame.width = vw; frame.height = vh; frame.getContext('2d').drawImage(v, 0, 0);
+  const b = mjGuideBox(), cw = b.w / b.cols, ch = b.h / mj.rows;
+  const small = document.createElement('canvas'); small.width = MJ_W; small.height = MJ_H; const sx = small.getContext('2d', { willReadFrequently: true });
+  const th = document.createElement('canvas'); th.width = 60; th.height = 80; const tx = th.getContext('2d');
+  let got = 0; const hadTpl = mjTplCount() > 0;
+  for (let k = 0; k < mj.n; k++) {
+    const r = Math.floor(k / b.cols), c = k % b.cols;
+    const x = (b.left + c * cw - ox) / sc, y = (b.top + r * ch - oy) / sc, w = cw / sc, h = ch / sc;
+    sx.drawImage(frame, x, y, w, h, 0, 0, MJ_W, MJ_H); tx.drawImage(frame, x, y, w, h, 0, 0, 60, 80);
+    const px = sx.getImageData(0, 0, MJ_W, MJ_H).data, g = new Uint8Array(MJ_W * MJ_H);
+    for (let i = 0; i < g.length; i++) g[i] = (px[i * 4] * 299 + px[i * 4 + 1] * 587 + px[i * 4 + 2] * 114) / 1000;
+    const t = mjGuess(g); if (t != null) got++;
+    mj.hand[k] = t; mjSlots[k] = { gray: g, thumb: th.toDataURL('image/jpeg', .7), guess: t != null };
+  }
+  mjCloseCam(); saveMj(); renderMj();
+  if (!hadTpl) { toast('Now tap each tile to say what it is. The scanner remembers them for next time'); mjOpenPick(0); }
+  else toast(got === mj.n ? 'All tiles filled in. Check the dashed ones' : `Filled in ${got} of ${mj.n}. Tap the empty boxes to finish`);
+}
+$('#mjShoot').addEventListener('click', mjCapture);
+$('#mjCamClose').addEventListener('click', mjCloseCam);
+$('#mjMinus').addEventListener('click', () => { mjResize(mj.n - 1); mjLayoutGuide(); renderMj(); });
+$('#mjPlus').addEventListener('click', () => { mjResize(mj.n + 1); mjLayoutGuide(); renderMj(); });
+$('#mjRows').addEventListener('click', () => { mj.rows = mj.rows === 2 ? 1 : 2; saveMj(); mjLayoutGuide(); renderMj(); });
+$('#mjTorch').addEventListener('click', e => {
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true', tr = mjStream && mjStream.getVideoTracks()[0];
+  if (tr) tr.applyConstraints({ advanced: [{ torch: on }] }).then(() => $('#mjTorch').setAttribute('aria-pressed', String(on))).catch(() => toast('The light can’t be turned on here'));
+});
+addEventListener('resize', () => { if (!$('#mjCam').hidden) mjLayoutGuide(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden && mjStream) mjCloseCam(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('#mjCam').hidden) mjCloseCam(); });
 start();
 })();
 </script>
