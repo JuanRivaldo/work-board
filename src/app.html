@@ -532,7 +532,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
       </div>
       <div class="sect"><h3>Projects</h3><p>Rename, reorder or delete projects. Deleting a project also deletes its cards.</p>
         <div id="sProjects" class="sect"></div>
-        <div class="ed-row"><button class="btn small" id="sNewProject">+ New project</button></div>
+        <div class="ed-row" style="flex-wrap:wrap"><button class="btn small" id="sNewProject">+ New project</button><label class="btn small">Add project from file<input type="file" id="sAddProj" accept=".json,application/json" hidden></label></div>
       </div>
       <div class="sect"><h3>People</h3><p>Owners you can assign cards to. Add their email so you can send them a card or a Google Calendar invite from the card.</p>
         <div id="sPeople" class="sect"></div>
@@ -1894,6 +1894,24 @@ function restore(text) {
   delete d.exportedAt; state = norm(d); state.projects.forEach(p => { p.nextNum = Math.max(p.nextNum || 1, ...state.cards.filter(c => cardProject(c) === p.id).map(c => c.num + 1)); }); commit(); renderAnySettings(); $('#sPaste').value = ''; toast(`Restored ${state.cards.length} cards`);
 }
 $('#sRestore').addEventListener('click', () => { const t = $('#sPaste').value.trim(); if (t) restore(t); else toast('Paste a backup into the box first'); });
+/* Adds the projects in a backup file next to the ones already here; existing projects and cards are left alone. */
+function addProjects(text) {
+  let d; try { d = JSON.parse(text); } catch (e) { return toast('That file is not a valid work board file'); }
+  if (!valid(d)) return toast('That file is not a work board file');
+  d = norm(d);
+  const have = new Set(state.projects.map(p => p.id)), add = d.projects.filter(p => !have.has(p.id));
+  if (!add.length) return toast('Those projects are already on your board');
+  const ids = new Set(add.map(p => p.id)), cardIds = new Set(state.cards.map(c => c.id));
+  const cards = d.cards.filter(c => ids.has(c.projectId) && !cardIds.has(c.id));
+  const map = {}; // people with the same name as someone already here become that person
+  for (const pp of (d.people || [])) { const m = person(pp.id) || state.people.find(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase()); if (m) map[pp.id] = m.id; else state.people.push(pp); }
+  cards.forEach(c => { if (c.owner && map[c.owner]) c.owner = map[c.owner]; if (Array.isArray(c.owners)) c.owners = c.owners.map(o => map[o] || o); });
+  state.projects.push(...add); state.cards.push(...cards);
+  add.forEach(p => { p.nextNum = Math.max(p.nextNum || 1, ...cards.filter(c => c.projectId === p.id).map(c => c.num + 1)); });
+  ui.project = add[0].id; saveUi(); commit(); renderAnySettings();
+  toast(`Added ${add.map(p => p.name).join(', ')} with ${cards.length} cards`);
+}
+$('#sAddProj').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(addProjects); e.target.value = ''; });
 $('#sFile').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; f.text().then(restore); e.target.value = ''; });
 let resetArmed = false;
 $('#sReset').addEventListener('click', () => {
