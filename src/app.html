@@ -60,6 +60,20 @@ select.f { padding: 7px 8px; border: 1px solid var(--line); border-radius: 6px; 
 .icon-btn { padding: 7px 9px; }
 
 .strip { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 12px; }
+.psum { margin: 0 16px 12px; background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); flex: none; display: flex; flex-direction: column; max-height: 42vh; min-height: 0; }
+.psum-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 8px 12px; }
+.psum-head h2 { margin: 0; font: 600 15px/1.2 var(--display); }
+.psum-head .stamp { flex: 1; }
+.psum-body { padding: 0 14px 12px; overflow-y: auto; font-size: 13.5px; line-height: 1.5; min-height: 0; }
+.psum-body h3 { margin: 10px 0 4px; font: 600 12px var(--body); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.psum-body h3:first-child { margin-top: 0; }
+.psum-body p { margin: 4px 0; max-width: 90ch; }
+.psum-body ul, .psum-body ol { margin: 4px 0; padding-left: 20px; display: grid; gap: 3px; max-width: 90ch; }
+.psum-body b { font-weight: 600; }
+.psum-body a { color: var(--accent); overflow-wrap: anywhere; }
+.psum-edit { padding: 0 12px 12px; display: grid; gap: 8px; }
+.psum-edit textarea { min-height: 180px; font: 13px/1.45 var(--mono); }
+.psum-edit .hint { font-size: 12px; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: transparent; font-size: 12.5px; cursor: pointer; font-variant-numeric: tabular-nums; }
 .chip b { font-weight: 600; }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
@@ -374,6 +388,7 @@ textarea.inp { min-height: 90px; font: 12px var(--mono); }
   </div>
 </header>
 <div class="strip" id="strip" data-board></div>
+<section class="psum" id="psum" aria-label="Project summary" hidden></section>
 <div class="notice" id="exampleNotice" hidden>
   <p>The cards marked <b>Example</b> show what the board can do. Add your own work, then clear them.</p>
   <button class="link" id="clearExamples">Remove example cards</button>
@@ -679,8 +694,51 @@ function renderStrip() {
     `<button class="chip soon" data-due="week" aria-pressed="${ui.due === 'week'}"><b>${week}</b> due in 7 days</button>` +
     `<button class="chip" data-pri="urgent" aria-pressed="${ui.priority === 'urgent'}"><b>${urgent}</b> urgent</button>` +
     `<span class="chip static"><b>${doneWeek}</b> finished this week</span>` +
-    ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '') + calChip();
+    ((ui.q || ui.person || ui.priority || ui.due) ? `<button class="chip" data-clear="1">Clear filters</button>` : '') + calChip() +
+    (P().summary || sumEditing ? '' : `<button class="chip" data-sum="1">+ Add summary</button>`);
+  renderSummary();
 }
+/* Project summary: a short status note shown above the board. Lines starting with "## " are headings, "- " or "1. " list items, **text** is bold. */
+let sumEditing = false;
+function sumHtml(t) {
+  const inline = x => esc(x).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/https?:\/\/[^\s<]+/g, u => `<a href="${u}" target="_blank" rel="noopener">${u}</a>`);
+  let out = '', list = '';
+  const close = () => { if (list) { out += `</${list}>`; list = ''; } };
+  for (const raw of t.split('\n')) {
+    const l = raw.trim(), ul = l.match(/^[-*•]\s+(.*)/), ol = l.match(/^\d+[.)]\s+(.*)/);
+    if (ul || ol) { const k = ul ? 'ul' : 'ol'; if (list !== k) { close(); out += `<${k}>`; list = k; } out += `<li>${inline((ul || ol)[1])}</li>`; continue; }
+    close();
+    if (!l) continue;
+    out += l.startsWith('## ') ? `<h3>${inline(l.slice(3))}</h3>` : `<p>${inline(l)}</p>`;
+  }
+  close(); return out;
+}
+function renderSummary() {
+  const el = $('#psum'), p = P(), hide = (ui.sumHide || {})[p.id];
+  el.hidden = ui.view !== 'board' || (!p.summary && !sumEditing);
+  if (el.hidden) return;
+  if (sumEditing) {
+    if (el.querySelector('#sumText')) return; // keep what is being typed
+    el.innerHTML = `<div class="psum-head"><h2>Summary</h2></div><div class="psum-edit">
+      <textarea class="inp" id="sumText" aria-label="Project summary">${esc(p.summary || '')}</textarea>
+      <p class="hint">Start a line with ## for a heading, - for a bullet or 1. for a numbered item. Wrap words in ** to make them bold.</p>
+      <div class="ed-row"><span class="sp" style="flex:1"></span><button class="btn small" data-sumact="cancel">Cancel</button><button class="btn small primary" data-sumact="save">Save summary</button></div></div>`;
+    $('#sumText').focus(); return;
+  }
+  const when = p.summaryAt ? 'Updated ' + new Date(p.summaryAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+  el.innerHTML = `<div class="psum-head"><h2>Summary</h2><span class="stamp">${esc(when)}</span>
+    <button class="btn small" data-sumact="edit">Edit</button><button class="btn small" data-sumact="toggle" aria-expanded="${!hide}">${hide ? 'Show' : 'Hide'}</button></div>
+    ${hide ? '' : `<div class="psum-body">${sumHtml(p.summary)}</div>`}`;
+}
+$('#psum').addEventListener('click', e => {
+  const b = e.target.closest('[data-sumact]'); if (!b) return;
+  const p = P(), act = b.dataset.sumact;
+  if (act === 'edit') { sumEditing = true; }
+  else if (act === 'cancel') { sumEditing = false; }
+  else if (act === 'save') { const t = $('#sumText').value.trim(); sumEditing = false; p.summary = t; p.summaryAt = Date.now(); if (!t) { delete p.summary; delete p.summaryAt; } commit(); toast(t ? 'Summary saved' : 'Summary removed'); return; }
+  else if (act === 'toggle') { ui.sumHide = { ...(ui.sumHide || {}), [p.id]: !(ui.sumHide || {})[p.id] }; saveUi(); }
+  $('#psum').innerHTML = ''; renderStrip();
+});
 function cardHtml(c) {
   const os = ownersOf(c), ds = dueState(c), done = doneIds().has(c.columnId), lastC = (c.comments || [])[(c.comments || []).length - 1];
   const ck = c.checklist.length ? `<span class="ck ${c.checklist.every(i => i.done) ? 'full' : ''}">☑ ${c.checklist.filter(i => i.done).length}/${c.checklist.length}</span>` : '';
@@ -911,9 +969,10 @@ $('#strip').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.due) ui.due = ui.due === b.dataset.due ? '' : b.dataset.due;
   if (b.dataset.pri) ui.priority = ui.priority === b.dataset.pri ? '' : b.dataset.pri;
+  if (b.dataset.sum) { sumEditing = true; $('#psum').innerHTML = ''; return renderStrip(); }
   if (b.dataset.cal) return connectCal();
   if (b.dataset.calerr) { $('#toast').classList.add('long'); toast(gErr + ' (tap again to retry)'); clearTimeout(toastT); toastT = setTimeout(() => { $('#toast').hidden = true; $('#toast').classList.remove('long'); }, 9000); gErr = ''; return syncCal(); }
-  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project, view: ui.view, ledMonth: ui.ledMonth, side: ui.side }; $('#q').value = ''; }
+  if (b.dataset.clear) { ui = { q: '', person: '', priority: '', due: '', project: ui.project, view: ui.view, ledMonth: ui.ledMonth, side: ui.side, sumHide: ui.sumHide }; $('#q').value = ''; }
   saveUi(); render();
 });
 $('#clearExamples').addEventListener('click', () => { const ex = new Set(pc().filter(c => c.example).map(c => c.id)), n = ex.size; state.cards = state.cards.filter(c => !ex.has(c.id)); commit(); toast(`Removed ${n} example cards`); });
@@ -1115,7 +1174,7 @@ function renderView() {
   document.querySelectorAll('[data-ledger]').forEach(el => { el.hidden = ui.view !== 'ledger'; });
   document.querySelectorAll('[data-bills]').forEach(el => { el.hidden = ui.view !== 'bills'; });
   document.querySelectorAll('[data-mj]').forEach(el => { el.hidden = ui.view !== 'mj'; });
-  if (ui.view !== 'board') { $('#exampleNotice').hidden = true; }
+  if (ui.view !== 'board') { $('#exampleNotice').hidden = true; $('#psum').hidden = true; }
 }
 function renderLedger() {
   const all = pl().sort(byDate);
@@ -1900,7 +1959,9 @@ function addProjects(text) {
   if (!valid(d)) return toast('That file is not a work board file');
   d = norm(d);
   const have = new Set(state.projects.map(p => p.id)), add = d.projects.filter(p => !have.has(p.id));
-  if (!add.length) return toast('Those projects are already on your board');
+  let newer = 0; // a project already here takes the file's summary when the file's is newer
+  for (const fp of d.projects) { const ex = state.projects.find(p => p.id === fp.id); if (ex && fp.summary && (fp.summaryAt || 0) > (ex.summaryAt || 0)) { ex.summary = fp.summary; ex.summaryAt = fp.summaryAt; newer++; } }
+  if (!add.length) { if (newer) { commit(); return toast('Updated the project summary'); } return toast('Those projects are already on your board'); }
   const ids = new Set(add.map(p => p.id)), cardIds = new Set(state.cards.map(c => c.id));
   const cards = d.cards.filter(c => ids.has(c.projectId) && !cardIds.has(c.id));
   const map = {}; // people with the same name as someone already here become that person
