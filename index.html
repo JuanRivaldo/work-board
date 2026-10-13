@@ -2162,6 +2162,12 @@ function restore(text) {
 }
 $('#sRestore').addEventListener('click', () => { const t = $('#sPaste').value.trim(); if (t) restore(t); else toast('Paste a backup into the box first'); });
 /* Adds the projects in a backup file next to the ones already here; existing projects and cards are left alone. */
+/* People in the file with the same name as someone already here become that person. */
+function mapPeople(d, cards) {
+  const map = {};
+  for (const pp of (d.people || [])) { const m = person(pp.id) || state.people.find(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase()); if (m) map[pp.id] = m.id; else state.people.push(pp); }
+  cards.forEach(c => { if (c.owner && map[c.owner]) c.owner = map[c.owner]; if (Array.isArray(c.owners)) c.owners = c.owners.map(o => map[o] || o); });
+}
 function addProjects(text) {
   let d; try { d = JSON.parse(text); } catch (e) { return toast('That file is not a valid work board file'); }
   if (!valid(d)) return toast('That file is not a work board file');
@@ -2169,12 +2175,19 @@ function addProjects(text) {
   const have = new Set(state.projects.map(p => p.id)), add = d.projects.filter(p => !have.has(p.id));
   let newer = 0; // a project already here takes the file's summary when the file's is newer
   for (const fp of d.projects) { const ex = state.projects.find(p => p.id === fp.id); if (ex && fp.summary && (fp.summaryAt || 0) > (ex.summaryAt || 0)) { ex.summary = fp.summary; ex.summaryAt = fp.summaryAt; newer++; } }
-  if (!add.length) { if (newer) { commit(); return toast('Updated the project summary'); } return toast('Those projects are already on your board'); }
   const ids = new Set(add.map(p => p.id)), cardIds = new Set(state.cards.map(c => c.id));
   const cards = d.cards.filter(c => ids.has(c.projectId) && !cardIds.has(c.id));
-  const map = {}; // people with the same name as someone already here become that person
-  for (const pp of (d.people || [])) { const m = person(pp.id) || state.people.find(x => x.name.trim().toLowerCase() === pp.name.trim().toLowerCase()); if (m) map[pp.id] = m.id; else state.people.push(pp); }
-  cards.forEach(c => { if (c.owner && map[c.owner]) c.owner = map[c.owner]; if (Array.isArray(c.owners)) c.owners = c.owners.map(o => map[o] || o); });
+  // cards that are new to a project already here are added too; cards already on the board are never changed
+  const extra = d.cards.filter(c => have.has(c.projectId) && !cardIds.has(c.id));
+  if (!add.length) {
+    if (!newer && !extra.length) return toast('Those projects and cards are already on your board');
+    mapPeople(d, extra);
+    for (const c of extra) { const pr = state.projects.find(p => p.id === c.projectId); if (!pr.columns.some(k => k.id === c.columnId)) c.columnId = pr.columns[0].id; c.num = pr.nextNum = Math.max(pr.nextNum || 1, ...state.cards.filter(x => cardProject(x) === pr.id).map(x => x.num + 1)); pr.nextNum++; c.order = state.cards.filter(x => x.columnId === c.columnId).length; state.cards.push(c); }
+    ui.project = extra.length ? extra[0].projectId : ui.project; saveUi(); commit(); renderAnySettings();
+    const msg = [extra.length ? `added ${extra.length} new card${extra.length > 1 ? 's' : ''}` : '', newer ? 'updated the summary' : ''].filter(Boolean).join(' and ');
+    return toast(msg[0].toUpperCase() + msg.slice(1));
+  }
+  mapPeople(d, cards);
   state.projects.push(...add); state.cards.push(...cards);
   add.forEach(p => { p.nextNum = Math.max(p.nextNum || 1, ...cards.filter(c => c.projectId === p.id).map(c => c.num + 1)); });
   ui.project = add[0].id; saveUi(); commit(); renderAnySettings();
